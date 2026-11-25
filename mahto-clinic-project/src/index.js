@@ -1,0 +1,3051 @@
+// ============================================================================
+// MAHTO CLINIC V2 PRO — کلینیک زیبایی مه تو (دکتر توحید اسماعیلی)
+// Editorial Typography + 3-Slide Hero Showcase + 3D Universe + Video Reels + D1
+// ============================================================================
+
+const BOOTSTRAP_SECRET = "mahto_v2_sync_2026";
+
+const STATIC_MIME = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  mp4: "video/mp4",
+  webm: "video/webm",
+  woff2: "font/woff2",
+  svg: "image/svg+xml",
+};
+
+function getMime(path) {
+  const ext = (path.split(".").pop() || "").toLowerCase();
+  return STATIC_MIME[ext] || "application/octet-stream";
+}
+
+function sanitize(val, max = 200) {
+  if (typeof val !== "string") return "";
+  return val.replace(/\r\n/g, "\n").trim().slice(0, max);
+}
+
+function normalizePhone(raw) {
+  const fa = "۰۱۲۳۴۵۶۷۸۹";
+  const ar = "٠١٢٣٤٥٦٧٨٩";
+  return String(raw || "")
+    .replace(/[۰-۹]/g, (c) => String(fa.indexOf(c)))
+    .replace(/[٠-٩]/g, (c) => String(ar.indexOf(c)))
+    .replace(/[^\d+]/g, "")
+    .slice(0, 18);
+}
+
+function randomHex(bytes = 8) {
+  const arr = new Uint8Array(bytes);
+  crypto.getRandomValues(arr);
+  return Array.from(arr)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function toHex(buf) {
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function fromHex(hex) {
+  const out = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return out;
+}
+
+function constantTimeEq(a, b) {
+  if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+function escAttr(str) {
+  return String(str || "#")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+async function hashPassword(password, saltHex) {
+  const salt = saltHex || randomHex(16);
+  const keyMat = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", hash: "SHA-256", salt: fromHex(salt), iterations: 100000 },
+    keyMat,
+    256
+  );
+  return { salt, hash: toHex(bits) };
+}
+
+async function ensureSchema(env) {
+  await env.SITE_DB.batch([
+    env.SITE_DB.prepare(`CREATE TABLE IF NOT EXISTS mahto_appointments (
+      id TEXT PRIMARY KEY,
+      code TEXT NOT NULL,
+      full_name TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      service TEXT NOT NULL,
+      preferred_time TEXT DEFAULT '',
+      notes TEXT DEFAULT '',
+      status TEXT DEFAULT 'pending',
+      created_at TEXT NOT NULL
+    )`),
+    env.SITE_DB.prepare(`CREATE TABLE IF NOT EXISTS mahto_admin (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      salt TEXT NOT NULL,
+      hash TEXT NOT NULL,
+      token_secret TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`),
+    env.SITE_DB.prepare(`CREATE TABLE IF NOT EXISTS mahto_config (
+      key TEXT PRIMARY KEY,
+      val TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`),
+  ]);
+}
+
+async function getConfigJson(env, key, fallback = {}) {
+  try {
+    const row = await env.SITE_DB.prepare("SELECT val FROM mahto_config WHERE key = ?").bind(key).first();
+    if (row?.val) return JSON.parse(row.val);
+  } catch {}
+  return fallback;
+}
+
+async function setConfigJson(env, key, val) {
+  await env.SITE_DB.prepare("INSERT OR REPLACE INTO mahto_config (key, val, updated_at) VALUES (?, ?, ?)")
+    .bind(key, JSON.stringify(val), new Date().toISOString())
+    .run();
+}
+
+async function signAdminToken(secret) {
+  const payload = btoa(JSON.stringify({ sub: "mahto_admin", exp: Date.now() + 86400000 }))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sigBuf = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload));
+  return `${payload}.${toHex(sigBuf)}`;
+}
+
+async function verifyAdminToken(env, request) {
+  const auth = request.headers.get("Authorization") || "";
+  const m = auth.match(/^Bearer\s+([A-Za-z0-9._-]+)$/);
+  if (!m) return false;
+  const [payload, sig] = m[1].split(".");
+  if (!payload || !sig) return false;
+  const admin = await env.SITE_DB.prepare("SELECT token_secret FROM mahto_admin WHERE id = 1").first();
+  if (!admin?.token_secret) return false;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(admin.token_secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const expected = toHex(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload)));
+  if (!constantTimeEq(sig, expected)) return false;
+  try {
+    let b64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    while (b64.length % 4) b64 += "=";
+    const data = JSON.parse(atob(b64));
+    return data.sub === "mahto_admin" && data.exp > Date.now();
+  } catch {
+    return false;
+  }
+}
+
+// ============================================================================
+// One-Shot V2 Sync: Fonts + Real Video + Instagram Probe + Legacy Cleanup
+// ============================================================================
+
+async function handleSyncV2(request, env, url) {
+  if (request.method !== "POST") return Response.json({ error: "POST only" }, { status: 405 });
+  if (url.searchParams.get("secret") !== BOOTSTRAP_SECRET) {
+    return new Response("Not Found", { status: 404 });
+  }
+  const body = await request.json().catch(() => ({}));
+  const action = body.action || url.searchParams.get("action") || "";
+  const lockId = body.lock || action;
+  const lockKey = `_mahto_v2_lock:${lockId}`;
+  if (await env.SITE_KV.get(lockKey)) {
+    return Response.json({ ok: true, skipped: true, lockId });
+  }
+
+  await ensureSchema(env);
+
+  if (action === "fonts") {
+    const items = Array.isArray(body.items) ? body.items : [];
+    const results = [];
+    for (const it of items) {
+      try {
+        const res = await fetch(it.url, {
+          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+          redirect: "follow",
+        });
+        if (!res.ok) {
+          results.push({ key: it.key, ok: false, status: res.status });
+          continue;
+        }
+        const buf = await res.arrayBuffer();
+        if (buf.byteLength > 2000) {
+          await env.SITE_KV.put(it.key, buf);
+          results.push({ key: it.key, ok: true, bytes: buf.byteLength });
+        } else {
+          results.push({ key: it.key, ok: false, bytes: buf.byteLength });
+        }
+      } catch (e) {
+        results.push({ key: it.key, ok: false, error: String(e) });
+      }
+    }
+    await env.SITE_KV.put(lockKey, "1");
+    return Response.json({ ok: true, action, results });
+  }
+
+  if (action === "media_and_ig") {
+    const report = { ig: null, telegramVideo: null, extraMedia: [] };
+    const links = await getConfigJson(env, "links", {});
+
+    // 1. Try Instagram public profile info via edge if endpoint provided
+    if (body.igApiUrl) {
+      try {
+        const igRes = await fetch(body.igApiUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
+            "X-IG-App-ID": "936619743392459",
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "fa-IR,fa;q=0.9,en-US;q=0.8",
+          },
+          redirect: "follow",
+        });
+        const ct = igRes.headers.get("content-type") || "";
+        if (igRes.ok && ct.includes("json")) {
+          const json = await igRes.json();
+          const user = json?.data?.user;
+          if (user) {
+            const edges = user?.edge_owner_to_timeline_media?.edges || [];
+            const savedIg = [];
+            for (let i = 0; i < Math.min(edges.length, 10); i++) {
+              const node = edges[i]?.node;
+              if (!node) continue;
+              const imgUrl = node.display_url || node.thumbnail_src;
+              const vidUrl = node.is_video ? node.video_url : null;
+              const caption = node?.edge_media_to_caption?.edges?.[0]?.node?.text || "";
+              const imgKey = `/assets/mahto/ig-post-${i + 1}.jpg`;
+              let imgOk = false;
+              if (imgUrl) {
+                try {
+                  const r = await fetch(imgUrl);
+                  if (r.ok) {
+                    const b = await r.arrayBuffer();
+                    if (b.byteLength > 1000) {
+                      await env.SITE_KV.put(imgKey, b);
+                      imgOk = true;
+                    }
+                  }
+                } catch {}
+              }
+              let vidKey = null;
+              if (vidUrl) {
+                const vk = `/assets/mahto/ig-reel-${i + 1}.mp4`;
+                try {
+                  const vr = await fetch(vidUrl);
+                  if (vr.ok) {
+                    const vb = await vr.arrayBuffer();
+                    if (vb.byteLength > 5000 && vb.byteLength < 18 * 1024 * 1024) {
+                      await env.SITE_KV.put(vk, vb);
+                      vidKey = vk;
+                    }
+                  }
+                } catch {}
+              }
+              if (imgOk) {
+                savedIg.push({
+                  key: imgKey,
+                  videoKey: vidKey,
+                  isVideo: Boolean(vidKey),
+                  caption: caption.slice(0, 420),
+                  shortcode: node.shortcode || "",
+                });
+              }
+            }
+            const igMeta = {
+              username: user.username || "mahto_clinic",
+              fullName: user.full_name || "",
+              bio: user.biography || "",
+              followers: user?.edge_followed_by?.count || 0,
+              postsCount: user?.edge_owner_to_timeline_media?.count || 0,
+              items: savedIg,
+            };
+            await setConfigJson(env, "ig_feed", igMeta);
+            report.ig = { ok: true, followers: igMeta.followers, savedItems: savedIg.length };
+          } else {
+            report.ig = { ok: false, reason: "no_user_payload", status: igRes.status };
+          }
+        } else {
+          report.ig = { ok: false, status: igRes.status, ct };
+        }
+      } catch (e) {
+        report.ig = { ok: false, error: String(e) };
+      }
+    }
+
+    // 2. Fetch fresh Telegram channel page to grab fresh signed MP4 video URL + poster
+    if (links.telegram) {
+      try {
+        const sUrl = links.telegram.replace(/\/mahto_clinic\/?$/, "/s/mahto_clinic");
+        const tgRes = await fetch(sUrl, {
+          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+        });
+        if (tgRes.ok) {
+          const html = await tgRes.text();
+          const vidMatch = html.match(/<video[^>]+src="([^"]+\.mp4[^"]*)"/);
+          const thumbMatch = html.match(/tgme_widget_message_video_thumb"[^>]+background-image:url\('([^']+)'\)/);
+          let vidBytes = 0, thumbBytes = 0;
+          if (vidMatch) {
+            const vRes = await fetch(vidMatch[1].replace(/&amp;/g, "&"));
+            if (vRes.ok) {
+              const vBuf = await vRes.arrayBuffer();
+              if (vBuf.byteLength > 5000) {
+                await env.SITE_KV.put("/assets/mahto/clinic-reel.mp4", vBuf);
+                vidBytes = vBuf.byteLength;
+              }
+            }
+          }
+          if (thumbMatch) {
+            const tRes = await fetch(thumbMatch[1].replace(/&amp;/g, "&"));
+            if (tRes.ok) {
+              const tBuf = await tRes.arrayBuffer();
+              if (tBuf.byteLength > 500) {
+                await env.SITE_KV.put("/assets/mahto/clinic-reel-poster.jpg", tBuf);
+                thumbBytes = tBuf.byteLength;
+              }
+            }
+          }
+          report.telegramVideo = { ok: vidBytes > 0, vidBytes, thumbBytes };
+        }
+      } catch (e) {
+        report.telegramVideo = { ok: false, error: String(e) };
+      }
+    }
+
+    await env.SITE_KV.put(lockKey, "1");
+    return Response.json({ ok: true, action, report });
+  }
+
+  if (action === "clean_legacy") {
+    const list = await env.SITE_KV.list({ limit: 100 });
+    const toDelete = [];
+    for (const k of list.keys || []) {
+      if (
+        k.name.startsWith("/assets/mahto/") ||
+        k.name.startsWith("/assets/fonts/") ||
+        k.name.startsWith("_mahto_v2_lock:")
+      ) {
+        continue;
+      }
+      toDelete.push(k.name);
+      if (toDelete.length >= 42) break;
+    }
+    await Promise.all(toDelete.map((k) => env.SITE_KV.delete(k)));
+    await env.SITE_KV.put(lockKey, "1");
+    return Response.json({ ok: true, action, deletedCount: toDelete.length });
+  }
+
+  return Response.json({ error: "unknown action" }, { status: 400 });
+}
+
+// ============================================================================
+// Static KV Serving with Full Byte-Range Support (MP4 Video + WOFF2 + JPEG)
+// ============================================================================
+
+async function serveKvAsset(request, env, key) {
+  const data = await env.SITE_KV.get(key, { type: "arrayBuffer" });
+  if (!data) return null;
+  const total = data.byteLength;
+  const mime = getMime(key);
+  const baseHeaders = {
+    "Content-Type": mime,
+    "Accept-Ranges": "bytes",
+    "Cache-Control": "public, max-age=31536000, immutable",
+    "Access-Control-Allow-Origin": "*",
+  };
+
+  const range = request.headers.get("Range");
+  if (range && range.startsWith("bytes=")) {
+    const [sStr, eStr] = range.replace("bytes=", "").split("-");
+    const start = parseInt(sStr, 10);
+    const end = eStr ? parseInt(eStr, 10) : total - 1;
+    if (!Number.isNaN(start) && start >= 0 && start < total && end >= start && end < total) {
+      const chunk = data.slice(start, end + 1);
+      return new Response(chunk, {
+        status: 206,
+        headers: {
+          ...baseHeaders,
+          "Content-Range": `bytes ${start}-${end}/${total}`,
+          "Content-Length": String(chunk.byteLength),
+        },
+      });
+    }
+    return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${total}` } });
+  }
+
+  return new Response(data, {
+    status: 200,
+    headers: { ...baseHeaders, "Content-Length": String(total) },
+  });
+}
+
+// ============================================================================
+// Main Editorial 3D Mahto Clinic Website (V2 Pro)
+// ============================================================================
+
+function renderMainHtml(links = {}, igFeed = null, hasVideo = true) {
+  const igUrl = escAttr(links.instagram || "#booking");
+  const tgUrl = escAttr(links.telegram || "#booking");
+  const eitaaUrl = escAttr(links.eitaa || "#booking");
+  const baleUrl = escAttr(links.bale || "#booking");
+  const rubikaUrl = escAttr(links.rubika || "#booking");
+  const neshanUrl = escAttr(links.neshan || "#booking");
+  const gmapsUrl = escAttr(links.gmaps || "#booking");
+
+  const igExtraJson = JSON.stringify(igFeed?.items || []);
+
+  return `<!doctype html>
+<html lang="fa" dir="rtl" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>کلینیک زیبایی مه تو | MAHTO CLINIC — دکتر توحید اسماعیلی، بابل</title>
+  <meta name="description" content="کلینیک تخصصی پوست، مو، لیزر سوپرانو تیتانیوم، فیلر و بوتاکس، هیر فیلر، فیشیال، لیفت و لاغری اسپارتینا در بابل با مدیریت دکتر توحید اسماعیلی (نظام پزشکی ۲۳۰۲۴۹)." />
+  <meta name="theme-color" content="#0c060a" />
+  <meta property="og:title" content="کلینیک زیبایی مه تو | MAHTO CLINIC" />
+  <meta property="og:description" content="جایی که علم و هنر زیبایی در کنار هم می‌درخشند — دکتر توحید اسماعیلی، بابل." />
+  <meta property="og:image" content="/assets/mahto/profile.jpg" />
+  <link rel="icon" type="image/jpeg" href="/assets/mahto/profile.jpg" />
+
+  <style>
+    /* Self-Hosted Edge Fonts — Instant Persian Typography (Zero CDN Blocking) */
+    @font-face {
+      font-family: "Vazirmatn";
+      src: url("/assets/fonts/vazirmatn-var.woff2") format("woff2");
+      font-weight: 100 900;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "MahtoDisplay";
+      src: url("/assets/fonts/gulzar.woff2") format("woff2");
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    :root {
+      --bg: #0a0509;
+      --bg-2: #150912;
+      --bg-radial:
+        radial-gradient(circle at 16% 10%, rgba(236, 98, 158, 0.22), transparent 45%),
+        radial-gradient(circle at 86% 20%, rgba(217, 178, 102, 0.17), transparent 44%),
+        radial-gradient(circle at 50% 85%, rgba(168, 56, 110, 0.16), transparent 52%),
+        linear-gradient(170deg, #090408 0%, #150912 52%, #0c050a 100%);
+      --glass: rgba(30, 13, 25, 0.66);
+      --glass-strong: rgba(34, 14, 28, 0.88);
+      --glass-soft: rgba(255, 240, 248, 0.045);
+      --glass-border: rgba(255, 224, 238, 0.14);
+      --glass-border-gold: rgba(227, 194, 126, 0.42);
+      --text: #fff8fc;
+      --text-soft: #ead6e1;
+      --muted: #bc9cad;
+      --gold: #d6ae60;
+      --gold-light: #f6e0aa;
+      --gold-deep: #9c742b;
+      --rose: #f27ab0;
+      --shadow-3d: 0 30px 68px -20px rgba(0, 0, 0, 0.78), inset 0 1px 0 rgba(255, 238, 246, 0.14);
+      --radius-2xl: 30px;
+      --radius-xl: 22px;
+      --radius-lg: 16px;
+      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+      --font-sans: "Vazirmatn", -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, sans-serif;
+      --font-display: "Vazirmatn", "MahtoDisplay", serif;
+      --font-serif-latin: "Didot", "Bodoni MT", "Palatino Linotype", Georgia, serif;
+    }
+
+    [data-theme="light"] {
+      --bg: #fff2f8;
+      --bg-2: #ffdce9;
+      --bg-radial:
+        radial-gradient(circle at 14% 10%, rgba(255, 134, 186, 0.32), transparent 45%),
+        radial-gradient(circle at 86% 18%, rgba(227, 194, 126, 0.32), transparent 46%),
+        radial-gradient(circle at 50% 88%, rgba(244, 146, 192, 0.24), transparent 52%),
+        linear-gradient(168deg, #fff7fb 0%, #ffe3ef 54%, #fff0f7 100%);
+      --glass: rgba(255, 253, 254, 0.76);
+      --glass-strong: rgba(255, 253, 254, 0.92);
+      --glass-soft: rgba(186, 68, 118, 0.05);
+      --glass-border: rgba(255, 255, 255, 0.94);
+      --glass-border-gold: rgba(192, 154, 82, 0.52);
+      --text: #20121a;
+      --text-soft: #4a2a3b;
+      --muted: #764c62;
+      --gold: #b58939;
+      --gold-light: #8a6424;
+      --gold-deep: #7a551c;
+      --rose: #d94b89;
+      --shadow-3d: 0 24px 54px -16px rgba(154, 52, 98, 0.18), inset 0 1.5px 0 rgba(255, 255, 255, 1);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html {
+      scroll-behavior: smooth;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-feature-settings: "ss01" 1, "tnum" 1;
+      text-rendering: optimizeLegibility;
+    }
+
+    body {
+      min-height: 100vh;
+      background: var(--bg-radial);
+      background-attachment: fixed;
+      color: var(--text);
+      font-size: 15.5px;
+      line-height: 1.86;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    button, input, select, textarea { font-family: var(--font-sans); }
+
+    /* Preserved Signature 3D Canvas Universe */
+    #universe3D {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+      display: block;
+    }
+
+    .studio-grid {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      background-image:
+        repeating-linear-gradient(90deg, rgba(242, 122, 176, 0.024) 0 1px, transparent 1px 44px),
+        radial-gradient(120% 80% at 50% 0%, transparent 48%, rgba(8, 2, 6, 0.36) 100%);
+    }
+    [data-theme="light"] .studio-grid {
+      background-image:
+        repeating-linear-gradient(90deg, rgba(186, 68, 118, 0.028) 0 1px, transparent 1px 44px),
+        radial-gradient(120% 80% at 50% 0%, transparent 54%, rgba(208, 92, 144, 0.12) 100%);
+    }
+
+    .site-layer { position: relative; z-index: 2; }
+    .container { width: 100%; max-width: 1240px; margin: 0 auto; padding: 0 22px; }
+
+    /* Luxury Glass Panel */
+    .glass {
+      position: relative;
+      background: var(--glass);
+      backdrop-filter: blur(24px) saturate(165%);
+      -webkit-backdrop-filter: blur(24px) saturate(165%);
+      border: 1px solid var(--glass-border);
+      box-shadow: var(--shadow-3d);
+      overflow: hidden;
+    }
+    .glass::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: radial-gradient(
+        360px circle at var(--mx, 50%) var(--my, 0%),
+        rgba(242, 122, 176, 0.16),
+        rgba(230, 195, 122, 0.11) 42%,
+        transparent 72%
+      );
+      opacity: 0;
+      transition: opacity 280ms var(--ease);
+      pointer-events: none;
+    }
+    .glass:hover::before { opacity: 1; }
+
+    /* Typography System */
+    .gold-gradient-text {
+      background: linear-gradient(122deg, #fff5d6 0%, #e5be6d 45%, #f588ba 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    [data-theme="light"] .gold-gradient-text {
+      background: linear-gradient(122deg, #8f6318 0%, #c68c29 45%, #cf387b 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .latin-kicker {
+      font-family: var(--font-serif-latin);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: var(--gold-light);
+      direction: ltr;
+      display: inline-block;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--gold-light);
+      padding: 6px 15px;
+      border-radius: 999px;
+      border: 1px solid var(--glass-border-gold);
+      background: var(--glass);
+      margin-bottom: 14px;
+    }
+
+    .section { padding: 84px 0; }
+    .section-head { text-align: center; max-width: 720px; margin: 0 auto 48px; }
+    .section-title {
+      font-size: clamp(1.75rem, 3.2vw, 2.65rem);
+      font-weight: 900;
+      line-height: 1.35;
+      letter-spacing: -0.02em;
+      margin-bottom: 12px;
+      text-wrap: balance;
+    }
+    .section-desc {
+      font-size: 0.98rem;
+      color: var(--text-soft);
+      font-weight: 400;
+      line-height: 1.9;
+    }
+
+    /* Buttons */
+    .btn-gold {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 13px 28px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 242, 204, 0.7);
+      background: linear-gradient(135deg, #f8e4b2 0%, #d4a853 48%, #a67c2e 100%);
+      color: #1a0e14;
+      font-weight: 800;
+      font-size: 0.92rem;
+      cursor: pointer;
+      box-shadow: 0 12px 30px -6px rgba(212, 168, 83, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+      transition: transform 240ms var(--ease), box-shadow 240ms var(--ease), filter 240ms var(--ease);
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    .btn-gold::after {
+      content: "";
+      position: absolute;
+      top: -30%; bottom: -30%; left: -60%; width: 38%;
+      background: linear-gradient(110deg, transparent, rgba(255, 255, 255, 0.68), transparent);
+      transform: skewX(-22deg);
+      animation: btnSweep 5.4s var(--ease) infinite;
+    }
+    @keyframes btnSweep { 0%, 66% { left: -60%; } 100% { left: 145%; } }
+    .btn-gold:hover { transform: translateY(-2px) scale(1.015); box-shadow: 0 18px 38px -6px rgba(212, 168, 83, 0.65); filter: brightness(1.04); }
+    .btn-gold:active { transform: scale(0.98); }
+
+    .btn-glass {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      padding: 12px 24px;
+      border-radius: 999px;
+      background: var(--glass-strong);
+      border: 1px solid var(--glass-border-gold);
+      color: var(--text);
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+      backdrop-filter: blur(16px);
+      transition: transform 220ms var(--ease), border-color 220ms var(--ease), background 220ms;
+      white-space: nowrap;
+    }
+    .btn-glass:hover { transform: translateY(-2px); border-color: var(--gold); }
+
+    /* Sticky Floating Header */
+    .navbar-wrap { position: sticky; top: 14px; z-index: 45; padding: 0 16px; }
+    .navbar {
+      max-width: 1220px; margin: 0 auto; border-radius: 999px; padding: 8px 14px 8px 10px;
+      display: flex; align-items: center; justify-content: space-between; gap: 14px;
+      background: var(--glass-strong); border: 1px solid var(--glass-border-gold);
+    }
+    .brand-link { display: flex; align-items: center; gap: 11px; min-width: 0; }
+    .brand-orb {
+      width: 44px; height: 44px; border-radius: 50%; background: #fff;
+      border: 2px solid var(--gold); display: grid; place-items: center; flex-shrink: 0;
+      box-shadow: 0 0 20px rgba(214, 174, 96, 0.4);
+    }
+    .brand-text strong { display: block; font-size: 0.98rem; font-weight: 900; line-height: 1.25; }
+    .brand-text span {
+      display: block; font-size: 0.62rem; letter-spacing: 0.26em; color: var(--gold-light);
+      font-family: var(--font-serif-latin); direction: ltr; text-align: right;
+    }
+
+    .nav-links { display: none; align-items: center; gap: 4px; list-style: none; }
+    @media (min-width: 1024px) { .nav-links { display: flex; } }
+    .nav-links a {
+      padding: 8px 14px; border-radius: 999px; font-size: 0.85rem; font-weight: 600;
+      color: var(--text-soft); transition: background 200ms, color 200ms;
+    }
+    .nav-links a:hover { background: rgba(242, 122, 176, 0.14); color: var(--text); }
+    .nav-actions { display: flex; align-items: center; gap: 8px; }
+    .icon-btn {
+      width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--glass-border-gold);
+      background: var(--glass); color: var(--gold-light); display: grid; place-items: center;
+      cursor: pointer; transition: transform 200ms var(--ease);
+    }
+    .icon-btn:hover { transform: scale(1.08); }
+    .nav-cta { padding: 9px 19px; font-size: 0.83rem; }
+
+    /* =========================================================================
+       CINEMATIC 3-SLIDE HERO SHOWCASE (TOP OF FIRST PAGE)
+       ========================================================================= */
+    .hero-slider-section {
+      padding: 26px 0 36px;
+    }
+    .hero-slider-frame {
+      position: relative;
+      border-radius: 34px;
+      border: 1px solid var(--glass-border-gold);
+      background: var(--glass);
+      backdrop-filter: blur(22px) saturate(165%);
+      -webkit-backdrop-filter: blur(22px) saturate(165%);
+      box-shadow: var(--shadow-3d);
+      overflow: hidden;
+    }
+    .hero-slider-top-rim {
+      position: absolute; top: 0; left: 10%; right: 10%; height: 2px; z-index: 12;
+      background: linear-gradient(90deg, transparent, rgba(242, 122, 176, 0.7), rgba(246, 224, 170, 0.95), rgba(242, 122, 176, 0.7), transparent);
+      pointer-events: none;
+    }
+
+    .hero-slides-track {
+      position: relative;
+      min-height: 560px;
+    }
+    @media (max-width: 960px) {
+      .hero-slides-track { min-height: 760px; }
+    }
+    @media (max-width: 540px) {
+      .hero-slides-track { min-height: 790px; }
+    }
+
+    .hero-slide {
+      position: absolute;
+      inset: 0;
+      padding: clamp(24px, 4vw, 52px) clamp(20px, 4vw, 54px) 98px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 28px;
+      align-items: center;
+      opacity: 0;
+      visibility: hidden;
+      transform: translate3d(0, 14px, 0) scale(0.985);
+      transition: opacity 680ms var(--ease), transform 780ms var(--ease), visibility 680ms;
+      z-index: 1;
+    }
+    @media (min-width: 960px) {
+      .hero-slide {
+        grid-template-columns: 1.12fr 0.88fr;
+        gap: 44px;
+        padding-bottom: 112px;
+      }
+    }
+    .hero-slide.active {
+      opacity: 1;
+      visibility: visible;
+      transform: translate3d(0, 0, 0) scale(1);
+      z-index: 4;
+    }
+
+    /* Subtle slide-specific ambient backdrop wash */
+    .slide-bg-tint {
+      position: absolute; inset: 0; pointer-events: none; z-index: 0;
+      opacity: 0.34;
+      background-size: cover;
+      background-position: center;
+      filter: blur(54px) saturate(140%);
+      transform: scale(1.18);
+    }
+    [data-theme="light"] .slide-bg-tint { opacity: 0.16; }
+
+    .slide-copy { position: relative; z-index: 2; }
+    .slide-kicker {
+      display: inline-flex; align-items: center; gap: 9px;
+      padding: 6px 15px; border-radius: 999px;
+      background: rgba(214, 174, 96, 0.13);
+      border: 1px solid var(--glass-border-gold);
+      font-size: 0.78rem; font-weight: 700; color: var(--gold-light);
+      margin-bottom: 18px;
+    }
+    .pulse-dot {
+      width: 8px; height: 8px; border-radius: 50%; background: var(--rose);
+      box-shadow: 0 0 12px var(--rose); animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.45); opacity: 0.55; } }
+
+    .slide-title {
+      font-size: clamp(1.95rem, 4.1vw, 3.35rem);
+      font-weight: 900;
+      line-height: 1.28;
+      letter-spacing: -0.025em;
+      margin-bottom: 16px;
+      text-wrap: balance;
+    }
+    .slide-lead {
+      font-size: 1rem;
+      color: var(--text-soft);
+      max-width: 570px;
+      line-height: 1.9;
+      margin-bottom: 24px;
+    }
+    .slide-highlights {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 26px;
+    }
+    .slide-chip {
+      font-size: 0.77rem; font-weight: 700; padding: 5px 13px; border-radius: 999px;
+      background: var(--glass-soft); border: 1px solid var(--glass-border-gold); color: var(--text);
+    }
+    .slide-actions {
+      display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+    }
+
+    /* Editorial Visual Stage on Right of Each Slide */
+    .slide-visual {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .visual-frame {
+      position: relative;
+      width: 100%;
+      max-width: 440px;
+      aspect-ratio: 4 / 3.85;
+      border-radius: 28px;
+      overflow: hidden;
+      border: 1.5px solid var(--glass-border-gold);
+      box-shadow: 0 28px 60px -14px rgba(0, 0, 0, 0.62);
+      background: #140811;
+    }
+    .visual-frame img {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+      transition: transform 6.5s ease-out;
+      transform: scale(1.06);
+    }
+    .hero-slide.active .visual-frame img { transform: scale(1); }
+
+    .visual-floating-badge {
+      position: absolute;
+      bottom: 14px;
+      right: 14px;
+      left: 14px;
+      padding: 12px 15px;
+      border-radius: 18px;
+      background: rgba(16, 6, 13, 0.78);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(246, 224, 170, 0.42);
+      color: #fff7fb;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .visual-floating-badge strong { font-size: 0.88rem; font-weight: 800; color: #f6e0aa; display: block; }
+    .visual-floating-badge span { font-size: 0.75rem; color: #ead4e0; }
+
+    /* Slide 1 Medallion Overlay */
+    .slide-medallion-badge {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      width: 78px;
+      height: 78px;
+      border-radius: 50%;
+      padding: 3px;
+      background: conic-gradient(from 0deg, #f6e0aa, #c09a52, #f27ab0, #f6e0aa);
+      box-shadow: 0 10px 26px rgba(0, 0, 0, 0.48);
+      cursor: pointer;
+      border: 0;
+    }
+    .slide-medallion-inner {
+      width: 100%; height: 100%; border-radius: 50%; overflow: hidden;
+      background: #fff; display: grid; place-items: center;
+    }
+
+    /* Slide 3 Collage Stack */
+    .collage-duo {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 12px;
+      width: 100%;
+      max-width: 460px;
+    }
+    .collage-main {
+      border-radius: 24px; overflow: hidden; border: 1.5px solid var(--glass-border-gold);
+      aspect-ratio: 3 / 4; box-shadow: 0 24px 50px rgba(0, 0, 0, 0.55);
+    }
+    .collage-side {
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .collage-mini {
+      flex: 1; border-radius: 20px; overflow: hidden; border: 1.5px solid var(--glass-border-gold);
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+    }
+    .collage-duo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+    /* Bottom 3-Slide Interactive Selector Dock + Animated Progress */
+    .hero-slider-dock {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 10;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      border-top: 1px solid var(--glass-border);
+      background: rgba(14, 5, 11, 0.68);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+    }
+    [data-theme="light"] .hero-slider-dock {
+      background: rgba(255, 248, 252, 0.84);
+    }
+    .slide-tab {
+      position: relative;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      padding: 14px 16px;
+      text-align: right;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      transition: background 220ms, color 220ms;
+      border-left: 1px solid var(--glass-border);
+    }
+    .slide-tab:last-child { border-left: 0; }
+    .slide-tab:hover { background: rgba(242, 122, 176, 0.08); color: var(--text); }
+    .slide-tab.active { background: rgba(214, 174, 96, 0.12); color: var(--text); }
+
+    .slide-tab-num {
+      font-size: 0.88rem; font-weight: 900; color: var(--gold-light);
+      width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+      border: 1px solid var(--glass-border-gold); display: grid; place-items: center;
+    }
+    .slide-tab.active .slide-tab-num {
+      background: linear-gradient(135deg, #f6e0aa, #c09a52); color: #1a0e14;
+    }
+    .slide-tab-meta { min-width: 0; }
+    .slide-tab-title {
+      display: block; font-size: 0.83rem; font-weight: 800;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .slide-tab-sub {
+      display: none; font-size: 0.72rem; color: var(--muted);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    @media (min-width: 720px) { .slide-tab-sub { display: block; } }
+
+    .slide-progress {
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 2.5px;
+      width: 0%;
+      background: linear-gradient(90deg, var(--rose), var(--gold-light));
+    }
+    .slide-tab.active .slide-progress {
+      animation: slideProgress 6.5s linear forwards;
+    }
+    .hero-slider-frame.is-paused .slide-tab.active .slide-progress {
+      animation-play-state: paused;
+    }
+    @keyframes slideProgress { from { width: 0%; } to { width: 100%; } }
+
+    /* Slider Floating Prev/Next Arrows */
+    .slider-arrow {
+      position: absolute;
+      top: 44%;
+      z-index: 12;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 1px solid var(--glass-border-gold);
+      background: var(--glass-strong);
+      color: var(--gold-light);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      transition: transform 200ms, background 200ms, color 200ms;
+    }
+    .slider-arrow:hover { transform: scale(1.1); background: linear-gradient(135deg, #f6e0aa, #d4a853); color: #1c1016; }
+    .slider-arrow.prev { right: 14px; }
+    .slider-arrow.next { left: 14px; }
+    @media (max-width: 640px) { .slider-arrow { display: none; } }
+
+    /* Trust Strip Directly Below Hero Slider */
+    .trust-strip {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-top: 18px;
+    }
+    @media (min-width: 768px) { .trust-strip { grid-template-columns: repeat(4, 1fr); } }
+    .trust-card {
+      border-radius: 20px; padding: 15px 16px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .trust-icon {
+      width: 42px; height: 42px; border-radius: 13px; flex-shrink: 0;
+      background: rgba(214, 174, 96, 0.14); border: 1px solid var(--glass-border-gold);
+      display: grid; place-items: center; font-size: 1.15rem;
+    }
+    .trust-card strong { display: block; font-size: 0.94rem; font-weight: 800; color: var(--gold-light); line-height: 1.3; }
+    .trust-card span { display: block; font-size: 0.76rem; color: var(--muted); }
+
+    /* =========================================================================
+       INSTAGRAM-STYLE STORIES / REELS & VIDEO SHOWCASE
+       ========================================================================= */
+    .stories-row {
+      display: flex;
+      gap: 14px;
+      overflow-x: auto;
+      padding: 6px 2px 14px;
+      scrollbar-width: none;
+    }
+    .stories-row::-webkit-scrollbar { display: none; }
+    .story-pill {
+      flex: 0 0 auto;
+      width: 96px;
+      text-align: center;
+      cursor: pointer;
+      background: transparent;
+      border: 0;
+      color: var(--text);
+    }
+    .story-ring {
+      width: 78px; height: 78px; margin: 0 auto 7px; border-radius: 50%; padding: 3px;
+      background: conic-gradient(from 0deg, #f6e0aa, #f27ab0, #c09a52, #f6e0aa);
+      transition: transform 240ms var(--ease);
+    }
+    .story-pill:hover .story-ring { transform: scale(1.07); }
+    .story-ring img {
+      width: 100%; height: 100%; border-radius: 50%; object-fit: cover;
+      border: 2.5px solid var(--bg); display: block;
+    }
+    .story-label {
+      font-size: 0.76rem; font-weight: 700; color: var(--text-soft);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .reel-showcase {
+      border-radius: var(--radius-2xl);
+      padding: clamp(22px, 3.8vw, 40px);
+      border: 1px solid var(--glass-border-gold);
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 30px;
+      align-items: center;
+      margin-top: 26px;
+    }
+    @media (min-width: 900px) { .reel-showcase { grid-template-columns: 0.82fr 1.18fr; } }
+    .reel-phone-frame {
+      position: relative;
+      max-width: 310px;
+      width: 100%;
+      margin: 0 auto;
+      aspect-ratio: 9 / 13.5;
+      border-radius: 28px;
+      overflow: hidden;
+      border: 2px solid var(--glass-border-gold);
+      background: #0a0408;
+      box-shadow: 0 28px 60px rgba(0, 0, 0, 0.65);
+    }
+    .reel-phone-frame video {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+    }
+    .reel-badge {
+      position: absolute; top: 12px; right: 12px;
+      padding: 5px 12px; border-radius: 999px;
+      background: rgba(14, 5, 11, 0.74); backdrop-filter: blur(10px);
+      border: 1px solid rgba(246, 224, 170, 0.45);
+      color: #f6e0aa; font-size: 0.72rem; font-weight: 800;
+    }
+
+    /* =========================================================================
+       SERVICES 3D TILT GRID
+       ========================================================================= */
+    .services-grid { display: grid; grid-template-columns: 1fr; gap: 22px; }
+    @media (min-width: 700px) { .services-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (min-width: 1060px) { .services-grid { grid-template-columns: repeat(3, 1fr); } }
+
+    .service-card {
+      border-radius: var(--radius-xl); display: flex; flex-direction: column;
+      transform-style: preserve-3d; perspective: 900px;
+      transition: transform 220ms var(--ease), border-color 240ms var(--ease);
+    }
+    .service-card:hover { border-color: var(--gold); }
+    .service-media { position: relative; aspect-ratio: 16 / 11; overflow: hidden; border-bottom: 1px solid var(--glass-border); }
+    .service-media img { width: 100%; height: 100%; object-fit: cover; transition: transform 600ms var(--ease); }
+    .service-card:hover .service-media img { transform: scale(1.07); }
+    .service-tag {
+      position: absolute; top: 12px; right: 12px; padding: 5px 12px; border-radius: 999px;
+      background: rgba(14, 6, 12, 0.76); backdrop-filter: blur(10px);
+      border: 1px solid rgba(246, 224, 170, 0.48); color: #f6e0aa; font-size: 0.72rem; font-weight: 800;
+    }
+    .service-body { padding: 22px; display: flex; flex-direction: column; flex: 1; gap: 10px; transform: translateZ(18px); }
+    .service-body h3 { font-size: 1.14rem; font-weight: 800; line-height: 1.4; }
+    .service-body p { font-size: 0.88rem; color: var(--text-soft); flex: 1; line-height: 1.85; }
+    .service-bullets { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+    .service-bullets li {
+      font-size: 0.73rem; padding: 4px 10px; border-radius: 999px;
+      background: rgba(214, 174, 96, 0.12); border: 1px solid var(--glass-border); color: var(--text-soft);
+    }
+    .service-btn {
+      width: 100%; padding: 11px 14px; border-radius: 14px; border: 1px solid var(--glass-border-gold);
+      background: rgba(214, 174, 96, 0.12); color: var(--text); font-weight: 800; font-size: 0.85rem;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: background 200ms, color 200ms, transform 200ms;
+    }
+    .service-btn:hover { background: linear-gradient(135deg, #f6e0aa, #d4a853); color: #1c1016; transform: translateY(-1px); }
+
+    /* =========================================================================
+       3D INTERACTIVE COVERFLOW GALLERY
+       ========================================================================= */
+    .gallery-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin-bottom: 24px; }
+    .filter-pill {
+      padding: 8px 17px; border-radius: 999px; border: 1px solid var(--glass-border);
+      background: var(--glass); color: var(--text-soft); font-size: 0.83rem; font-weight: 700;
+      cursor: pointer; transition: all 220ms var(--ease);
+    }
+    .filter-pill.active, .filter-pill:hover {
+      border-color: var(--gold);
+      background: linear-gradient(135deg, rgba(246, 224, 170, 0.24), rgba(242, 122, 176, 0.22));
+      color: var(--text);
+    }
+
+    .stage-3d-shell { position: relative; padding: 20px 0 30px; }
+    .coverflow-stage {
+      position: relative; height: 460px; perspective: 1450px; transform-style: preserve-3d;
+      overflow: hidden; touch-action: pan-y; user-select: none;
+    }
+    @media (max-width: 640px) { .coverflow-stage { height: 410px; } }
+    .cf-card {
+      position: absolute; top: 50%; left: 50%; width: min(320px, 78vw); height: 396px;
+      margin-left: calc(min(320px, 78vw) / -2); margin-top: -198px; border-radius: 24px;
+      overflow: hidden; border: 1.5px solid var(--glass-border-gold); background: #140811;
+      box-shadow: 0 32px 64px -16px rgba(0, 0, 0, 0.74); cursor: pointer;
+      transition: transform 560ms var(--ease), opacity 480ms var(--ease), filter 480ms var(--ease);
+      will-change: transform, opacity;
+    }
+    .cf-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .cf-overlay {
+      position: absolute; inset: auto 0 0 0; padding: 50px 16px 16px;
+      background: linear-gradient(to top, rgba(10, 3, 8, 0.95) 0%, rgba(10, 3, 8, 0.65) 58%, transparent 100%);
+      color: #fff7fb;
+    }
+    .cf-cat { display: inline-block; font-size: 0.7rem; font-weight: 800; color: #f6e0aa; margin-bottom: 4px; }
+    .cf-title { font-size: 0.94rem; font-weight: 800; line-height: 1.45; margin-bottom: 4px; }
+    .cf-excerpt {
+      font-size: 0.75rem; color: rgba(255, 238, 246, 0.84);
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .cf-nav-bar { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 12px; }
+    .cf-arrow {
+      width: 46px; height: 46px; border-radius: 50%; border: 1px solid var(--glass-border-gold);
+      background: var(--glass-strong); color: var(--gold-light); display: grid; place-items: center;
+      cursor: pointer; transition: transform 200ms, background 200ms;
+    }
+    .cf-arrow:hover { transform: scale(1.1); background: linear-gradient(135deg, #f6e0aa, #d4a853); color: #1c1016; }
+    .cf-counter { font-size: 0.86rem; font-weight: 800; color: var(--gold-light); min-width: 72px; text-align: center; }
+
+    .gallery-grid-mode { display: none; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+    .gallery-grid-mode.active { display: grid; }
+    .stage-3d-shell.hidden { display: none; }
+    .grid-item {
+      position: relative; aspect-ratio: 4 / 5; border-radius: 20px; overflow: hidden;
+      border: 1px solid var(--glass-border-gold); cursor: pointer;
+    }
+    .grid-item img { width: 100%; height: 100%; object-fit: cover; transition: transform 480ms var(--ease); }
+    .grid-item:hover img { transform: scale(1.06); }
+
+    /* =========================================================================
+       SOPRANO TECH, KNOWLEDGE VAULT, DOCTOR & BOOKING
+       ========================================================================= */
+    .tech-showcase {
+      border-radius: var(--radius-2xl); padding: clamp(22px, 4vw, 44px);
+      border: 1px solid var(--glass-border-gold); display: grid; grid-template-columns: 1fr;
+      gap: 32px; align-items: center;
+    }
+    @media (min-width: 960px) { .tech-showcase { grid-template-columns: 1.05fr 0.95fr; } }
+    .tech-collage { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 14px; }
+    .tech-photo { border-radius: 20px; overflow: hidden; border: 1px solid var(--glass-border-gold); box-shadow: 0 18px 36px rgba(0, 0, 0, 0.35); }
+    .tech-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .tech-col-right { display: flex; flex-direction: column; gap: 14px; }
+
+    .protocol-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 14px; }
+    .proto-tab {
+      padding: 8px 15px; border-radius: 12px; border: 1px solid var(--glass-border);
+      background: var(--glass-soft); color: var(--text-soft); font-size: 0.82rem; font-weight: 700;
+      cursor: pointer; transition: all 200ms;
+    }
+    .proto-tab.active { border-color: var(--gold); background: rgba(214, 174, 96, 0.22); color: var(--text); }
+    .proto-panel {
+      border-radius: 18px; padding: 18px 20px; background: var(--glass-soft);
+      border: 1px solid var(--glass-border-gold); font-size: 0.91rem; color: var(--text-soft); line-height: 1.9;
+    }
+    .proto-panel strong { color: var(--gold-light); display: block; margin-bottom: 6px; font-size: 0.96rem; }
+
+    .vault-grid { display: grid; grid-template-columns: 1fr; gap: 18px; }
+    @media (min-width: 820px) { .vault-grid { grid-template-columns: repeat(2, 1fr); } }
+    .vault-card {
+      border-radius: var(--radius-xl); padding: 22px; display: grid; grid-template-columns: 108px 1fr;
+      gap: 18px; align-items: start; transition: transform 240ms var(--ease), border-color 240ms;
+    }
+    @media (max-width: 480px) { .vault-card { grid-template-columns: 1fr; } }
+    .vault-card:hover { transform: translateY(-4px); border-color: var(--gold); }
+    .vault-thumb { width: 100%; aspect-ratio: 1 / 1.18; border-radius: 14px; overflow: hidden; border: 1px solid var(--glass-border-gold); cursor: pointer; }
+    .vault-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .vault-card h3 { font-size: 1.05rem; font-weight: 800; margin-bottom: 7px; color: var(--gold-light); line-height: 1.45; }
+    .vault-card p, .vault-list { font-size: 0.86rem; color: var(--text-soft); line-height: 1.85; }
+    .vault-list { list-style: none; margin-top: 8px; display: grid; gap: 5px; }
+    .vault-list li::before { content: "✦ "; color: var(--rose); font-weight: 900; }
+
+    .doctor-box {
+      border-radius: var(--radius-2xl); padding: clamp(24px, 4vw, 44px);
+      border: 1px solid var(--glass-border-gold); display: grid; grid-template-columns: 1fr;
+      gap: 34px; align-items: center;
+    }
+    @media (min-width: 900px) { .doctor-box { grid-template-columns: 290px 1fr; } }
+    .doc-portrait-frame {
+      position: relative; width: 260px; height: 315px; margin: 0 auto; border-radius: 28px;
+      padding: 5px; background: linear-gradient(145deg, #f6e0aa, #c09a52, #f27ab0);
+      box-shadow: 0 24px 54px rgba(0, 0, 0, 0.48);
+    }
+    .doc-portrait-frame img { width: 100%; height: 100%; border-radius: 23px; object-fit: cover; object-position: center 15%; display: block; }
+    .doc-code-pill {
+      position: absolute; bottom: -14px; left: 50%; transform: translateX(-50%);
+      padding: 6px 16px; border-radius: 999px; background: #1a0c15; border: 1px solid #f6e0aa;
+      color: #f6e0aa; font-size: 0.78rem; font-weight: 800; white-space: nowrap;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+    }
+
+    .wizard-box {
+      border-radius: var(--radius-2xl); padding: clamp(20px, 3.5vw, 30px);
+      border: 1px solid var(--glass-border-gold); margin-bottom: 24px;
+    }
+    .wizard-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+    .wiz-chip {
+      padding: 8px 15px; border-radius: 999px; border: 1px solid var(--glass-border);
+      background: var(--glass-soft); color: var(--text-soft);
+      font-size: 0.83rem; font-weight: 700; cursor: pointer; transition: all 200ms var(--ease);
+    }
+    .wiz-chip.active, .wiz-chip:hover {
+      border-color: var(--gold);
+      background: linear-gradient(135deg, rgba(246, 224, 170, 0.22), rgba(242, 122, 176, 0.22));
+      color: var(--text);
+    }
+    .wizard-output {
+      border-radius: 18px; padding: 15px 18px;
+      background: rgba(214, 174, 96, 0.1); border: 1px solid var(--glass-border-gold);
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px;
+    }
+
+    .booking-grid { display: grid; grid-template-columns: 1fr; gap: 24px; }
+    @media (min-width: 960px) { .booking-grid { grid-template-columns: 1.08fr 0.92fr; } }
+    .form-card, .contact-card { border-radius: var(--radius-2xl); padding: clamp(22px, 3.5vw, 34px); border: 1px solid var(--glass-border-gold); }
+    .form-grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 18px; }
+    @media (min-width: 600px) { .form-grid.two-col { grid-template-columns: 1fr 1fr; } }
+    .field label { display: block; font-size: 0.82rem; font-weight: 700; color: var(--text-soft); margin-bottom: 6px; }
+    .field input, .field select, .field textarea {
+      width: 100%; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--glass-border-gold);
+      background: rgba(14, 6, 12, 0.56); color: var(--text); font-size: 0.91rem; outline: none;
+      transition: border-color 200ms, box-shadow 200ms;
+    }
+    [data-theme="light"] .field input, [data-theme="light"] .field select, [data-theme="light"] .field textarea { background: rgba(255, 255, 255, 0.92); }
+    .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--rose); box-shadow: 0 0 0 3px rgba(242, 122, 176, 0.22); }
+
+    .booking-result { margin-top: 16px; padding: 16px; border-radius: 16px; background: rgba(34, 197, 94, 0.14); border: 1px solid rgba(74, 222, 128, 0.45); display: none; }
+    .booking-result.show { display: block; }
+    .booking-result.err { background: rgba(239, 68, 68, 0.14); border-color: rgba(248, 113, 113, 0.5); }
+
+    .phone-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 12px 14px; border-radius: 16px; background: rgba(214, 174, 96, 0.1);
+      border: 1px solid var(--glass-border-gold); margin-bottom: 10px;
+    }
+    .phone-row a { display: flex; align-items: center; gap: 12px; font-weight: 800; font-size: 1.02rem; }
+    .phone-badge {
+      width: 36px; height: 36px; border-radius: 11px; background: linear-gradient(145deg, #f6e0aa, #c09a52);
+      color: #1c1016; display: grid; place-items: center; font-weight: 900; flex-shrink: 0;
+    }
+    .copy-mini {
+      padding: 7px 13px; border-radius: 10px; border: 1px solid var(--glass-border-gold);
+      background: var(--glass); color: var(--text); font-size: 0.78rem; font-weight: 700; cursor: pointer;
+    }
+
+    .social-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 16px 0; }
+    @media (min-width: 520px) { .social-grid { grid-template-columns: repeat(3, 1fr); } }
+    .social-pill {
+      display: flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 10px;
+      border-radius: 14px; background: var(--glass-soft); border: 1px solid var(--glass-border);
+      font-size: 0.84rem; font-weight: 700; transition: transform 200ms, border-color 200ms, background 200ms;
+    }
+    .social-pill:hover { transform: translateY(-2px); border-color: var(--gold); background: rgba(242, 122, 176, 0.14); }
+    .map-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+
+    footer { padding: 38px 0 96px; text-align: center; border-top: 1px solid var(--glass-border); margin-top: 40px; }
+    @media (min-width: 768px) { footer { padding-bottom: 44px; } }
+
+    .hud-3d {
+      position: fixed; bottom: 20px; left: 20px; z-index: 38;
+      display: none; align-items: center; gap: 6px; padding: 6px 10px;
+      border-radius: 999px; background: var(--glass-strong);
+      border: 1px solid var(--glass-border-gold); backdrop-filter: blur(18px);
+    }
+    @media (min-width: 768px) { .hud-3d { display: flex; } }
+    .hud-btn {
+      padding: 6px 11px; border-radius: 999px; border: 1px solid transparent;
+      background: transparent; color: var(--text-soft); font-size: 0.76rem; font-weight: 700;
+      cursor: pointer; transition: all 180ms;
+    }
+    .hud-btn:hover { background: rgba(242, 122, 176, 0.18); color: var(--text); border-color: var(--glass-border-gold); }
+
+    .mobile-dock {
+      position: fixed; left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); z-index: 45;
+      border-radius: 999px; padding: 7px; display: grid; grid-template-columns: 1fr 1.25fr 1fr; gap: 6px;
+      background: var(--glass-strong); border: 1px solid var(--glass-border-gold);
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.52); backdrop-filter: blur(22px);
+    }
+    @media (min-width: 768px) { .mobile-dock { display: none; } }
+    .dock-item {
+      padding: 10px 6px; border-radius: 999px; font-size: 0.8rem; font-weight: 800;
+      text-align: center; display: flex; align-items: center; justify-content: center; gap: 5px;
+    }
+    .dock-item.primary { background: linear-gradient(135deg, #f6e0aa, #d4a853); color: #1c1016; }
+
+    .lightbox {
+      position: fixed; inset: 0; z-index: 80; background: rgba(8, 2, 7, 0.9);
+      backdrop-filter: blur(18px); display: none; align-items: center; justify-content: center; padding: 20px;
+    }
+    .lightbox.open { display: flex; }
+    .lb-box {
+      max-width: 880px; width: 100%; max-height: 90vh; overflow-y: auto; border-radius: 26px;
+      background: #170a13; border: 1px solid var(--glass-border-gold); display: grid;
+      grid-template-columns: 1fr; color: #fff7fb;
+    }
+    @media (min-width: 760px) { .lb-box { grid-template-columns: 1.05fr 0.95fr; } }
+    .lb-media { background: #0a0408; display: flex; align-items: center; justify-content: center; min-height: 280px; }
+    .lb-media img, .lb-media video { width: 100%; height: 100%; max-height: 76vh; object-fit: contain; }
+    .lb-content { padding: 26px; display: flex; flex-direction: column; justify-content: space-between; gap: 16px; }
+    .lb-close {
+      position: fixed; top: 18px; left: 18px; width: 44px; height: 44px; border-radius: 50%;
+      border: 1px solid var(--glass-border-gold); background: rgba(20, 8, 16, 0.92);
+      color: #f6e0aa; font-size: 1.3rem; cursor: pointer;
+    }
+
+    .toast {
+      position: fixed; top: 20px; left: 50%; transform: translate(-50%, -24px); z-index: 95;
+      padding: 10px 22px; border-radius: 999px; background: #1a0c15; color: #f6e0aa;
+      border: 1px solid rgba(246, 224, 170, 0.55); font-size: 0.85rem; font-weight: 800;
+      opacity: 0; pointer-events: none; transition: opacity 220ms, transform 240ms var(--ease);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+    .reveal { opacity: 0; transform: translateY(24px); transition: opacity 650ms var(--ease), transform 650ms var(--ease); }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+  </style>
+</head>
+<body>
+  <canvas id="universe3D" aria-hidden="true"></canvas>
+  <div class="studio-grid" aria-hidden="true"></div>
+
+  <div class="site-layer">
+    <!-- Sticky Floating Glass Navigation -->
+    <div class="navbar-wrap">
+      <nav class="navbar glass" aria-label="منوی اصلی کلینیک زیبایی مه تو">
+        <a href="#top" class="brand-link">
+          <span class="brand-orb">
+            <svg width="34" height="34" viewBox="0 0 120 120" aria-hidden="true">
+              <defs>
+                <linearGradient id="navGold" x1="14%" y1="6%" x2="88%" y2="90%">
+                  <stop offset="0%" stop-color="#F0D89E" />
+                  <stop offset="45%" stop-color="#C8A258" />
+                  <stop offset="100%" stop-color="#9A7430" />
+                </linearGradient>
+              </defs>
+              <path d="M 65.5 13 C 40.5 13.5, 22 31.5, 22.8 53.5 C 23.5 72.5, 38.5 85.5, 58.2 85.5 C 69.2 85.5, 78.8 81.2, 84.8 74.2 C 76.4 79.0, 65.6 79.8, 56.6 76.2 C 50.8 73.8, 48.2 70.0, 49.0 66.2 C 49.6 63.4, 52.8 62.6, 55.2 61.8 C 57.0 61.2, 57.6 59.8, 56.4 58.8 C 57.8 58.2, 58.2 57.1, 56.6 56.4 C 58.2 55.5, 58.4 54.3, 56.8 53.6 C 56.2 53.3, 56.2 52.4, 57.2 51.9 L 60.4 50.4 C 61.2 50.0, 61.1 49.0, 60.2 48.4 C 57.8 46.8, 56.2 44.6, 56.0 42.2 C 55.8 39.6, 56.8 36.8, 56.4 33.4 C 55.9 28.4, 58.4 21.8, 65.5 13 Z" fill="url(#navGold)"/>
+              <path d="M 78.2 24.5 L 79.6 28.4 L 83.5 29.8 L 79.6 31.2 L 78.2 35.1 L 76.8 31.2 L 72.9 29.8 L 76.8 28.4 Z" fill="url(#navGold)"/>
+            </svg>
+          </span>
+          <span class="brand-text">
+            <strong>کلینیک زیبایی مه تو</strong>
+            <span>MAHTO CLINIC</span>
+          </span>
+        </a>
+
+        <ul class="nav-links">
+          <li><a href="#top">اسلایدر اصلی</a></li>
+          <li><a href="#reels">ویدیو و استوری‌ها</a></li>
+          <li><a href="#services">خدمات تخصصی</a></li>
+          <li><a href="#gallery">گالری سه‌بعدی</a></li>
+          <li><a href="#soprano">سوپرانو تیتانیوم</a></li>
+          <li><a href="#knowledge">دانستنی‌ها</a></li>
+          <li><a href="#booking">رزرو و تماس</a></li>
+        </ul>
+
+        <div class="nav-actions">
+          <button type="button" class="icon-btn" id="themeToggle" title="تغییر تم شب و استودیو ساکورا" aria-label="تغییر تم رنگی">☀</button>
+          <a href="#booking" class="btn-gold nav-cta">رزرو نوبت</a>
+        </div>
+      </nav>
+    </div>
+
+    <!-- TOP 3-SLIDE EDITORIAL HERO SLIDER -->
+    <header id="top" class="hero-slider-section">
+      <div class="container">
+        <div class="hero-slider-frame" id="heroSliderFrame" aria-roledescription="carousel" aria-label="اسلایدر سه‌تایی کلینیک زیبایی مه تو">
+          <span class="hero-slider-top-rim" aria-hidden="true"></span>
+
+          <button type="button" class="slider-arrow prev" id="heroPrev" aria-label="اسلاید قبلی">→</button>
+          <button type="button" class="slider-arrow next" id="heroNext" aria-label="اسلاید بعدی">←</button>
+
+          <div class="hero-slides-track" id="heroSlidesTrack">
+            <!-- SLIDE 1: Brand & Doctor -->
+            <div class="hero-slide active" data-slide="0">
+              <div class="slide-bg-tint" style="background-image:url('/assets/mahto/welcome.jpg');"></div>
+              <div class="slide-copy">
+                <div class="slide-kicker">
+                  <span class="pulse-dot"></span>
+                  <span>اسلاید ۰۱ · کلینیک زیبایی مه تو — بابل</span>
+                </div>
+                <h1 class="slide-title">
+                  جایی که <span class="gold-gradient-text">علم و هنر زیبایی</span><br />
+                  در کنار هم می‌درخشند
+                </h1>
+                <p class="slide-lead">
+                  در <strong>کلینیک تخصصی مه تو (MAHTO CLINIC)</strong> تحت نظر مستقیم
+                  <strong>دکتر توحید اسماعیلی</strong> (نظام پزشکی ۲۳۰۲۴۹)، هر پروتکل درمانی با تکیه بر
+                  آناتومی چهره، مواد اصیل و حفظ کامل زیبایی طبیعی شما طراحی می‌شود.
+                </p>
+                <div class="slide-highlights">
+                  <span class="slide-chip">پوست، مو و لاغری</span>
+                  <span class="slide-chip">نظام پزشکی ۲۳۰۲۴۹</span>
+                  <span class="slide-chip">مشاوره تخصصی رایگان</span>
+                </div>
+                <div class="slide-actions">
+                  <a href="#booking" class="btn-gold">رزرو نوبت و مشاوره رایگان</a>
+                  <a href="#reels" class="btn-glass">▶ تماشای ویدیو و استوری‌ها</a>
+                </div>
+              </div>
+              <div class="slide-visual">
+                <div class="visual-frame">
+                  <img src="/assets/mahto/profile.jpg" alt="دکتر توحید اسماعیلی — کلینیک زیبایی مه تو" style="object-position:center 18%;" />
+                  <button type="button" class="slide-medallion-badge" title="لوگوی رسمی مه تو" aria-label="لوگوی کلینیک مه تو">
+                    <span class="slide-medallion-inner">
+                      <svg width="56" height="56" viewBox="0 0 120 120" aria-hidden="true">
+                        <path d="M 65.5 13 C 40.5 13.5, 22 31.5, 22.8 53.5 C 23.5 72.5, 38.5 85.5, 58.2 85.5 C 69.2 85.5, 78.8 81.2, 84.8 74.2 C 76.4 79.0, 65.6 79.8, 56.6 76.2 C 50.8 73.8, 48.2 70.0, 49.0 66.2 C 49.6 63.4, 52.8 62.6, 55.2 61.8 C 57.0 61.2, 57.6 59.8, 56.4 58.8 C 57.8 58.2, 58.2 57.1, 56.6 56.4 C 58.2 55.5, 58.4 54.3, 56.8 53.6 C 56.2 53.3, 56.2 52.4, 57.2 51.9 L 60.4 50.4 C 61.2 50.0, 61.1 49.0, 60.2 48.4 C 57.8 46.8, 56.2 44.6, 56.0 42.2 C 55.8 39.6, 56.8 36.8, 56.4 33.4 C 55.9 28.4, 58.4 21.8, 65.5 13 Z" fill="url(#navGold)"/>
+                        <text x="60" y="102" text-anchor="middle" fill="#241E19" font-family="Georgia,serif" font-size="13" font-weight="700" letter-spacing="2">MAHTO</text>
+                      </svg>
+                    </span>
+                  </button>
+                  <div class="visual-floating-badge">
+                    <div>
+                      <strong>دکتر توحید اسماعیلی</strong>
+                      <span>بابل، میدان شهید سجودی، ساختمان مازیار</span>
+                    </div>
+                    <a href="tel:+989201827726" dir="ltr" style="font-weight:800; color:#f6e0aa; font-size:0.84rem; white-space:nowrap;">۰۹۲۰ ۱۸۲ ۷۷۲۶</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SLIDE 2: Soprano Titanium Laser -->
+            <div class="hero-slide" data-slide="1">
+              <div class="slide-bg-tint" style="background-image:url('/assets/mahto/soprano-tech.jpg');"></div>
+              <div class="slide-copy">
+                <div class="slide-kicker">
+                  <span class="pulse-dot"></span>
+                  <span>اسلاید ۰۲ · تکنولوژی نسل جدید لیزر</span>
+                </div>
+                <h2 class="slide-title">
+                  لیزر بدون درد با دستگاه<br />
+                  <span class="gold-gradient-text">Soprano Titanium</span>
+                </h2>
+                <p class="slide-lead">
+                  ترکیبی از قدرت، سرعت و خنک‌کنندگی پیشرفته؛ مناسب برای تمام تیپ‌های پوستی حتی
+                  پوست‌های سبزه. تنظیمات هر فرد به‌صورت اختصاصی و مطابق چرخه رشد فعال مو (فاز آناژن)
+                  تعیین می‌شود تا به صافی کامل و ماندگار برسید.
+                </p>
+                <div class="slide-highlights">
+                  <span class="slide-chip">مناسب پوست سبزه</span>
+                  <span class="slide-chip">بدون موهای زیرپوستی</span>
+                  <span class="slide-chip">پایش هورمونی پزشک</span>
+                </div>
+                <div class="slide-actions">
+                  <button type="button" class="btn-gold" data-select-service="لیزر موهای زائد (Soprano Titanium)">رزرو جلسه لیزر سوپرانو</button>
+                  <a href="#soprano" class="btn-glass">مشاهده نتیجه قبل و بعد ✦</a>
+                </div>
+              </div>
+              <div class="slide-visual">
+                <div class="collage-duo">
+                  <div class="collage-main">
+                    <img src="/assets/mahto/laser-before-after.jpg" alt="نتیجه واقعی صافی پوست بعد از جلسات لیزر مه تو" />
+                  </div>
+                  <div class="collage-side">
+                    <div class="collage-mini">
+                      <img src="/assets/mahto/soprano-tech.jpg" alt="دستگاه لیزر سوپرانو تیتانیوم" />
+                    </div>
+                    <div class="collage-mini">
+                      <img src="/assets/mahto/laser-protocol.jpg" alt="پروتکل اختصاصی تنظیمات لیزر" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SLIDE 3: Natural Fillers, Botox & Hair Filler -->
+            <div class="hero-slide" data-slide="2">
+              <div class="slide-bg-tint" style="background-image:url('/assets/mahto/chin-filler.jpg');"></div>
+              <div class="slide-copy">
+                <div class="slide-kicker">
+                  <span class="pulse-dot"></span>
+                  <span>اسلاید ۰۳ · تزریقات تخصصی، هیر فیلر و جوانسازی</span>
+                </div>
+                <h2 class="slide-title">
+                  زیبایی ظریف و طبیعی،<br />
+                  <span class="gold-gradient-text">بدون اغراق و Overfilling</span>
+                </h2>
+                <p class="slide-lead">
+                  از فیلر چانه و کانتورینگ هارمونیک چهره تا بوتاکس تخصصی، جوانساز زیر چشم و
+                  درمان ریزش مو با <strong>هیر فیلر</strong>؛ همراه با پروتکل‌های لاغری اسپارتینا و فیشیال تخصصی
+                  تحت نظارت کامل پزشک.
+                </p>
+                <div class="slide-highlights">
+                  <span class="slide-chip">فیلر چانه و لب</span>
+                  <span class="slide-chip">بوتاکس و جوانساز چشم</span>
+                  <span class="slide-chip">هیر فیلر و اسپارتینا</span>
+                </div>
+                <div class="slide-actions">
+                  <button type="button" class="btn-gold" data-select-service="فیلر و کانتورینگ چهره">رزرو مشاوره تخصصی</button>
+                  <a href="#gallery" class="btn-glass">گالری سه‌بعدی نمونه‌کارها</a>
+                </div>
+              </div>
+              <div class="slide-visual">
+                <div class="collage-duo">
+                  <div class="collage-main">
+                    <img src="/assets/mahto/chin-filler.jpg" alt="فیلر چانه ظریف در کلینیک مه تو" />
+                  </div>
+                  <div class="collage-side">
+                    <div class="collage-mini">
+                      <img src="/assets/mahto/hair-filler-1.jpg" alt="تزریق هیر فیلر برای تقویت ریشه مو" />
+                    </div>
+                    <div class="collage-mini">
+                      <img src="/assets/mahto/undereye.jpg" alt="جوانساز تخصصی زیر چشم" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Interactive 3-Slide Bottom Selector Bar -->
+          <div class="hero-slider-dock" role="tablist" aria-label="انتخاب اسلاید">
+            <button type="button" class="slide-tab active" data-goto="0" role="tab" aria-selected="true">
+              <span class="slide-progress"></span>
+              <span class="slide-tab-num">۰۱</span>
+              <span class="slide-tab-meta">
+                <span class="slide-tab-title">کلینیک مه تو · دکتر اسماعیلی</span>
+                <span class="slide-tab-sub">هویت برند، تخصص و مشاوره رایگان</span>
+              </span>
+            </button>
+            <button type="button" class="slide-tab" data-goto="1" role="tab" aria-selected="false">
+              <span class="slide-progress"></span>
+              <span class="slide-tab-num">۰۲</span>
+              <span class="slide-tab-meta">
+                <span class="slide-tab-title">لیزر Soprano Titanium</span>
+                <span class="slide-tab-sub">بدون درد، قبل و بعد صافی پوست</span>
+              </span>
+            </button>
+            <button type="button" class="slide-tab" data-goto="2" role="tab" aria-selected="false">
+              <span class="slide-progress"></span>
+              <span class="slide-tab-num">۰۳</span>
+              <span class="slide-tab-meta">
+                <span class="slide-tab-title">فیلر، بوتاکس و هیر فیلر</span>
+                <span class="slide-tab-sub">هارمونی طبیعی، جوانساز و اسپارتینا</span>
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 4 Luxury Trust Metrics Strip -->
+        <div class="trust-strip">
+          <div class="trust-card glass">
+            <span class="trust-icon">🩺</span>
+            <div><strong>نظام پزشکی ۲۳۰۲۴۹</strong><span>انجام خدمات زیر نظر پزشک</span></div>
+          </div>
+          <div class="trust-card glass">
+            <span class="trust-icon">⚡</span>
+            <div><strong>Soprano Titanium</strong><span>لیزر بدون درد نسل جدید</span></div>
+          </div>
+          <div class="trust-card glass">
+            <span class="trust-icon">✨</span>
+            <div><strong>۶ شاخه تخصصی</strong><span>پوست، مو، لیزر و لاغری</span></div>
+          </div>
+          <div class="trust-card glass">
+            <span class="trust-icon">💬</span>
+            <div><strong>مشاوره رایگان</strong><span>پاسخگویی سریع در بابل</span></div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- HIGHLIGHTS & REAL CLINIC VIDEO REEL SHOWCASE -->
+    <section id="reels" class="section" style="padding-top:34px;">
+      <div class="container">
+        <div class="section-head reveal" style="margin-bottom:28px;">
+          <span class="eyebrow">هایلایت‌ها و ویدیوی رسمی · @mahto_clinic</span>
+          <h2 class="section-title">نگاهی زنده به فضای کلینیک و نمونه‌کارها</h2>
+        </div>
+
+        <!-- Interactive Instagram-Style Highlights Strip -->
+        <div class="stories-row reveal" id="storiesRow" aria-label="هایلایت‌های کلینیک زیبایی مه تو"></div>
+
+        <!-- Video Reel Showcase -->
+        <div class="reel-showcase glass reveal">
+          <div class="reel-phone-frame">
+            <span class="reel-badge">🎬 ویدیوی رسمی مه تو</span>
+            ${hasVideo
+              ? `<video controls playsinline preload="metadata" poster="/assets/mahto/clinic-reel-poster.jpg">
+                   <source src="/assets/mahto/clinic-reel.mp4" type="video/mp4" />
+                 </video>`
+              : `<img src="/assets/mahto/welcome.jpg" alt="کلینیک زیبایی مه تو" style="width:100%;height:100%;object-fit:cover;" />`
+            }
+          </div>
+          <div>
+            <span class="latin-kicker">MAHTO AESTHETIC REELS</span>
+            <h3 class="section-title" style="text-align:right; font-size:clamp(1.45rem,2.6vw,2.15rem); margin-top:6px;">
+              آرامش، استاندارد پزشکی و <span class="gold-gradient-text">زیبایی اصیل</span> در یک قاب
+            </h3>
+            <p style="color:var(--text-soft); line-height:1.95; margin-bottom:18px;">
+              تمامی تصاویر و ویدیوهای این صفحه مستقیماً از آرشیو رسمی رسانه‌های کلینیک زیبایی مه تو
+              (<strong>@mahto_clinic</strong>) استخراج شده‌اند؛ از معرفی دستگاه سوپرانو تیتانیوم و نتایج واقعی صافی پوست
+              تا آموزش‌های تخصصی مراقبت بعد از بوتاکس، هیر فیلر و فیلر چانه.
+            </p>
+            <div style="display:flex; flex-wrap:wrap; gap:10px;">
+              <a href="${igUrl}" target="_blank" rel="noopener noreferrer" class="btn-gold">مشاهده کامل ریلزها در اینستاگرام ↗</a>
+              <a href="${tgUrl}" target="_blank" rel="noopener noreferrer" class="btn-glass">عضویت در کانال تلگرام مه تو</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SERVICES (3D TILT CARDS) -->
+    <section id="services" class="section">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="eyebrow">خدمات تخصصی کلینیک مه تو</span>
+          <h2 class="section-title">طراحی زیبایی طبیعی با متدهای روز دنیا</h2>
+          <p class="section-desc">کارت‌های سه‌بعدی زیر را بررسی کنید و مستقیماً برای خدمت مورد نظرتان نوبت مشاوره رایگان رزرو کنید.</p>
+        </div>
+
+        <div class="services-grid">
+          <article class="service-card glass tilt-3d reveal">
+            <div class="service-media">
+              <img src="/assets/mahto/chin-filler.jpg" alt="فیلر چانه و کانتورینگ طبیعی چهره در کلینیک مه تو" loading="lazy" />
+              <span class="service-tag">هارمونی طبیعی چهره</span>
+            </div>
+            <div class="service-body">
+              <h3>فیلر و کانتورینگ چهره</h3>
+              <p>فیلر چانه، لب، گونه و زاویه‌سازی با تکنیک اصولی و بدون حجم‌دهی اغراق‌آمیز (Overfilling) برای ایجاد تناسب جذاب و طبیعی.</p>
+              <ul class="service-bullets"><li>فیلر چانه ظریف</li><li>متعادل‌سازی نیم‌رخ</li><li>برندهای معتبر</li></ul>
+              <button type="button" class="service-btn" data-select-service="فیلر و کانتورینگ چهره">رزرو مشاوره فیلر ←</button>
+            </div>
+          </article>
+
+          <article class="service-card glass tilt-3d reveal">
+            <div class="service-media">
+              <img src="/assets/mahto/soprano-tech.jpg" alt="دستگاه لیزر موهای زائد سوپرانو تیتانیوم کلینیک مه تو" loading="lazy" />
+              <span class="service-tag">Soprano Titanium</span>
+            </div>
+            <div class="service-body">
+              <h3>لیزر موهای زائد بدون درد</h3>
+              <p>جدیدترین نسل لیزر دنیا؛ ترکیب قدرت، سرعت و راحتی کامل با تنظیمات اختصاصی برای تمام تیپ‌های پوستی، حتی پوست‌های سبزه.</p>
+              <ul class="service-bullets"><li>بدون درد و سوختگی</li><li>پروتکل اختصاصی پوست</li><li>ماندگاری بالا</li></ul>
+              <button type="button" class="service-btn" data-select-service="لیزر موهای زائد (Soprano Titanium)">رزرو جلسه لیزر ←</button>
+            </div>
+          </article>
+
+          <article class="service-card glass tilt-3d reveal">
+            <div class="service-media">
+              <img src="/assets/mahto/botox-care.jpg" alt="بوتاکس تخصصی در کلینیک زیبایی مه تو" loading="lazy" />
+              <span class="service-tag">نتیجه طبیعی و ماندگار</span>
+            </div>
+            <div class="service-body">
+              <h3>بوتاکس تخصصی و رفع خطوط</h3>
+              <p>تزریق دقیق بوتاکس برای کاهش خطوط پیشانی، خط اخم و دور چشم با حفظ حالت طبیعی میمیک صورت و آموزش کامل مراقبت‌های پس از تزریق.</p>
+              <ul class="service-bullets"><li>خط اخم و پیشانی</li><li>خطوط پنجه‌کلاغی</li><li>تزریق توسط پزشک</li></ul>
+              <button type="button" class="service-btn" data-select-service="بوتاکس تخصصی">رزرو نوبت بوتاکس ←</button>
+            </div>
+          </article>
+
+          <article class="service-card glass tilt-3d reveal">
+            <div class="service-media">
+              <img src="/assets/mahto/hair-filler-1.jpg" alt="تزریق هیر فیلر برای درمان ریزش مو در کلینیک مه تو" loading="lazy" />
+              <span class="service-tag">تقویت ریشه و فولیکول</span>
+            </div>
+            <div class="service-body">
+              <h3>هیر فیلر و درمان ریزش مو</h3>
+              <p>روش تخصصی و مؤثر برای تقویت فولیکول‌ها، کاهش ریزش مو، تحریک رشد مجدد و افزایش ضخامت و استحکام موهای ضعیف و کم‌پشت.</p>
+              <ul class="service-bullets"><li>کاهش ریزش مو</li><li>افزایش ضخامت تار مو</li><li>تغذیه پوست سر</li></ul>
+              <button type="button" class="service-btn" data-select-service="هیر فیلر و تقویت مو">رزرو مشاوره هیر فیلر ←</button>
+            </div>
+          </article>
+
+          <article class="service-card glass tilt-3d reveal">
+            <div class="service-media">
+              <img src="/assets/mahto/undereye.jpg" alt="جوانساز زیر چشم و فیشیال تخصصی کلینیک مه تو" loading="lazy" />
+              <span class="service-tag">روشن‌سازی و طراوت</span>
+            </div>
+            <div class="service-body">
+              <h3>فیشیال و جوانساز زیر چشم</h3>
+              <p>ترکیبی دقیق از مواد تقویت‌کننده برای رفع تیرگی، خطوط ریز و شلی بافت زیر چشم همراه با فیشیال و پاکسازی تخصصی پوست.</p>
+              <ul class="service-bullets"><li>رفع تیرگی زیر چشم</li><li>کاهش چروک سطحی</li><li>فیشیال تخصصی</li></ul>
+              <button type="button" class="service-btn" data-select-service="فیشیال و جوانساز زیر چشم">رزرو فیشیال و جوانساز ←</button>
+            </div>
+          </article>
+
+          <article class="service-card glass tilt-3d reveal">
+            <div class="service-media">
+              <img src="/assets/mahto/welcome.jpg" alt="لاغری، اسپارتینا و لیفت در کلینیک مه تو" loading="lazy" />
+              <span class="service-tag">تناسب اندام و لیفت</span>
+            </div>
+            <div class="service-body">
+              <h3>لاغری، اسپارتینا و لیفت</h3>
+              <p>پروتکل‌های علمی لاغری تحت نظر پزشک (اسپارتینا و لاغری تخصصی) همراه با روش‌های نوین لیفت غیرجراحی برای طراوت و فرم‌دهی.</p>
+              <ul class="service-bullets"><li>پروتکل اسپارتینا</li><li>لاغری تحت نظر پزشک</li><li>لیفت جوانساز</li></ul>
+              <button type="button" class="service-btn" data-select-service="لاغری، اسپارتینا و لیفت">رزرو مشاوره لاغری و لیفت ←</button>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3D INTERACTIVE COVERFLOW GALLERY -->
+    <section id="gallery" class="section">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="eyebrow">گالری تعاملی سه‌بعدی · @mahto_clinic</span>
+          <h2 class="section-title">تصاویر و نمونه‌کارهای واقعی کلینیک مه تو</h2>
+          <p class="section-desc">کارت‌ها را به چپ و راست بکشید یا روی تصویر مرکزی کلیک کنید تا با توضیحات کامل باز شود.</p>
+        </div>
+
+        <div class="gallery-controls reveal">
+          <button type="button" class="filter-pill active" data-cat="all">همه تصاویر</button>
+          <button type="button" class="filter-pill" data-cat="laser">لیزر سوپرانو</button>
+          <button type="button" class="filter-pill" data-cat="inject">فیلر و بوتاکس</button>
+          <button type="button" class="filter-pill" data-cat="skin">هیر فیلر و پوست</button>
+          <button type="button" class="filter-pill" id="toggleViewMode">نمای شبکه‌ای ▦</button>
+        </div>
+
+        <div class="stage-3d-shell" id="stage3dShell">
+          <div class="coverflow-stage" id="coverflowStage" aria-label="گالری سه‌بعدی تصاویر کلینیک"></div>
+          <div class="cf-nav-bar">
+            <button type="button" class="cf-arrow" id="cfPrev" aria-label="تصویر قبلی">→</button>
+            <div class="cf-counter" id="cfCounter">۱ / ۱۳</div>
+            <button type="button" class="cf-arrow" id="cfNext" aria-label="تصویر بعدی">←</button>
+          </div>
+        </div>
+
+        <div class="gallery-grid-mode" id="galleryGridMode"></div>
+      </div>
+    </section>
+
+    <!-- SOPRANO TITANIUM TECH SPOTLIGHT -->
+    <section id="soprano" class="section">
+      <div class="container">
+        <div class="tech-showcase glass reveal">
+          <div>
+            <span class="eyebrow">تکنولوژی اختصاصی لیزر در بابل</span>
+            <h2 class="section-title" style="text-align:right;">دستگاه لیزر <span class="gold-gradient-text">Soprano Titanium</span></h2>
+            <p style="color:var(--text-soft); margin-top:8px;">تنظیمات لیزر در کلینیک مه تو برای همه افراد یکسان نیست؛ نتیجه قطعی و پوست صاف بدون موهای زیرپوستی از یک تنظیم علمی و اختصاصی شروع می‌شود.</p>
+
+            <div class="protocol-tabs" role="tablist">
+              <button type="button" class="proto-tab active" data-proto="0">پوست‌های روشن تا سبزه</button>
+              <button type="button" class="proto-tab" data-proto="1">زمان‌بندی چرخه آناژن</button>
+              <button type="button" class="proto-tab" data-proto="2">پایش هورمونی پزشک</button>
+            </div>
+
+            <div class="proto-panel" id="protoPanel">
+              <strong>پروتکل اختصاصی هر تیپ پوستی (روشن تا سبزه)</strong>
+              دستگاه Soprano Titanium با سیستم خنک‌کننده پیشرفته و طول موج‌های ترکیبی، کاملاً ایمن، بدون درد و مناسب تمام تیپ‌های پوستی حتی پوست‌های سبزه است.
+            </div>
+
+            <div style="margin-top:20px; display:flex; flex-wrap:wrap; gap:10px;">
+              <button type="button" class="btn-gold" data-select-service="لیزر موهای زائد (Soprano Titanium)">رزرو تست و مشاوره لیزر</button>
+              <button type="button" class="btn-glass" id="openBeforeAfterBtn">مشاهده نتیجه قبل و بعد ✦</button>
+            </div>
+          </div>
+
+          <div class="tech-collage">
+            <div class="tech-photo" style="aspect-ratio: 3/4;">
+              <img src="/assets/mahto/laser-before-after.jpg" alt="نتیجه قبل و بعد صافی پوست با لیزر سوپرانو تیتانیوم" loading="lazy" />
+            </div>
+            <div class="tech-col-right">
+              <div class="tech-photo" style="aspect-ratio: 4/3;">
+                <img src="/assets/mahto/soprano-intro.jpg" alt="آشنایی با دستگاه سوپرانو تیتانیوم" loading="lazy" />
+              </div>
+              <div class="tech-photo" style="aspect-ratio: 4/3;">
+                <img src="/assets/mahto/laser-protocol.jpg" alt="تنظیمات اختصاصی لیزر برای هر پوست" loading="lazy" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MEDICAL KNOWLEDGE VAULT -->
+    <section id="knowledge" class="section">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="eyebrow">دانستنی‌های علمی کلینیک مه تو</span>
+          <h2 class="section-title">پاسخ دقیق به پرتکرارترین سؤالات مراجعین</h2>
+          <p class="section-desc">برگرفته مستقیم از آموزش‌های تخصصی منتشرشده توسط تیم پزشکی کلینیک زیبایی مه تو</p>
+        </div>
+
+        <div class="vault-grid">
+          <article class="vault-card glass reveal">
+            <div class="vault-thumb" data-open-img="/assets/mahto/filler-myth.jpg">
+              <img src="/assets/mahto/filler-myth.jpg" alt="آیا فیلر باعث افتادگی پوست می‌شود" loading="lazy" />
+            </div>
+            <div>
+              <h3>آیا فیلر باعث افتادگی پوست می‌شود؟</h3>
+              <p>اگر فیلر مناسب با تکنیک درست و در ناحیه صحیح تزریق شود، هرگز باعث افتادگی پوست نمی‌شود. ظاهر غیرطبیعی فقط نتیجه تزریق بیش از حد (Overfilling) یا انتخاب نادرست ناحیه است؛ فیلر اصولی برای حفظ هارمونی چهره انجام می‌شود.</p>
+            </div>
+          </article>
+
+          <article class="vault-card glass reveal">
+            <div class="vault-thumb" data-open-img="/assets/mahto/botox-care.jpg">
+              <img src="/assets/mahto/botox-care.jpg" alt="مراقبت‌های بعد از تزریق بوتاکس" loading="lazy" />
+            </div>
+            <div>
+              <h3>۶ قانون طلایی بعد از تزریق بوتاکس</h3>
+              <ul class="vault-list">
+                <li>تا ۴ ساعت دراز نکشید و سر را پایین نگیرید</li>
+                <li>ناحیه تزریق را ماساژ و فشار ندهید</li>
+                <li>تا ۲۴ ساعت ورزش سنگین، الکل و حمام یا سونای داغ ممنوع</li>
+                <li>ساعات اول عضلات هدف را آرام حرکت دهید تا بهتر فیکس شود</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="vault-card glass reveal">
+            <div class="vault-thumb" data-open-img="/assets/mahto/laser-cycle.jpg">
+              <img src="/assets/mahto/laser-cycle.jpg" alt="چرخه رشد مو و نظم جلسات لیزر" loading="lazy" />
+            </div>
+            <div>
+              <h3>چرا نباید جلسات لیزر را زودتر انجام داد؟</h3>
+              <p>موهای بدن ۳ مرحله رشد دارند و لیزر فقط روی موهای فاز «رشد فعال (آناژن)» اثر می‌گذارد. رعایت نکردن فواصل اصولی روی ریشه‌های غیرفعال اثری ندارد؛ همچنین در موارد هورمونی (مثل PCOS یا استرس بالا) پایش پزشک کنار لیزر نتیجه را چندبرابر می‌کند.</p>
+            </div>
+          </article>
+
+          <article class="vault-card glass reveal">
+            <div class="vault-thumb" data-open-img="/assets/mahto/hair-filler-2.jpg">
+              <img src="/assets/mahto/hair-filler-2.jpg" alt="مزایای تزریق هیر فیلر" loading="lazy" />
+            </div>
+            <div>
+              <h3>۷ مزیت علمی تزریق هیر فیلر</h3>
+              <ul class="vault-list">
+                <li>تقویت فولیکول‌ها و تغذیه عمقی ریشه مو</li>
+                <li>کاهش محسوس ریزش و تحریک رشد مجدد</li>
+                <li>افزایش ضخامت، استحکام و بهبود کیفیت پوست سر</li>
+                <li>ایده‌آل برای موهای ضعیف، کم‌پشت و آسیب‌دیده</li>
+              </ul>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- DOCTOR PROFILE -->
+    <section id="doctor" class="section">
+      <div class="container">
+        <div class="doctor-box glass reveal">
+          <div class="doc-portrait-frame">
+            <img src="/assets/mahto/profile.jpg" alt="دکتر توحید اسماعیلی — کلینیک زیبایی مه تو بابل" />
+            <span class="doc-code-pill">نظام پزشکی ۲۳۰۲۴۹</span>
+          </div>
+          <div>
+            <span class="eyebrow">مدیر فنی و پزشک کلینیک زیبایی مه تو</span>
+            <h2 class="section-title" style="text-align:right; margin-bottom:10px;">دکتر توحید اسماعیلی</h2>
+            <p style="color:var(--text-soft); margin-bottom:16px; line-height:1.95;">
+              در کلینیک زیبایی مه تو باور داریم «زیبایی، حق شماست» و بهترین نتیجه زیبایی نتیجه‌ای است که
+              طبیعی، ایمن، علمی و متناسب با آناتومی منحصربه‌فرد چهره و پوست خودتان باشد. تمامی خدمات
+              تزریقات زیبایی، جوانسازی، درمان‌های مو، لیزر و پروتکل‌های لاغری پس از مشاوره تخصصی و ارزیابی
+              دقیق انجام می‌پذیرد.
+            </p>
+            <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:16px;">
+              <a href="#booking" class="btn-gold">رزرو جلسه مشاوره با دکتر</a>
+              <button type="button" class="btn-glass" id="saveVcardBtn">ذخیره شماره در مخاطبین گوشی ↓</button>
+              <button type="button" class="btn-glass" id="shareSiteBtn">اشتراک‌گذاری صفحه ↗</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SMART WIZARD + BOOKING + OFFICIAL CONTACT -->
+    <section id="booking" class="section">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="eyebrow">مشاور هوشمند و رزرو نوبت آنلاین</span>
+          <h2 class="section-title">همین حالا مشاوره رایگان خود را رزرو کنید</h2>
+          <p class="section-desc">درخواست شما مستقیم در سیستم پذیرش کلینیک ثبت می‌شود و کارشناسان زیبایی مه تو در اسرع وقت با شما تماس می‌گیرند.</p>
+        </div>
+
+        <div class="wizard-box glass reveal">
+          <div style="font-size:0.95rem; font-weight:800; color:var(--gold-light);">✦ راهنمای سریع انتخاب خدمت: دغدغه اصلی شما چیست؟</div>
+          <div class="wizard-chips" id="wizardChips"></div>
+          <div class="wizard-output">
+            <p id="wizardAdvice" style="font-size:0.9rem; color:var(--text-soft); flex:1; min-width:220px;"></p>
+            <button type="button" class="btn-gold" id="wizardApplyBtn" style="padding:10px 20px; font-size:0.85rem;">انتخاب در فرم نوبت‌دهی ↓</button>
+          </div>
+        </div>
+
+        <div class="booking-grid">
+          <div class="form-card glass reveal">
+            <h3 style="font-size:1.25rem; font-weight:900;">فرم ثبت نوبت و مشاوره رایگان</h3>
+            <p style="font-size:0.86rem; color:var(--muted); margin-top:4px;">اطلاعات را وارد کنید تا کد پیگیری نوبت برای شما صادر شود.</p>
+
+            <form id="bookingForm">
+              <div class="form-grid two-col">
+                <div class="field">
+                  <label for="fName">نام و نام خانوادگی *</label>
+                  <input id="fName" name="fullName" type="text" required placeholder="مثلاً: سارا محمدی" />
+                </div>
+                <div class="field">
+                  <label for="fPhone">شماره تماس (موبایل) *</label>
+                  <input id="fPhone" name="phone" type="tel" dir="ltr" required placeholder="0911xxxxxxx" />
+                </div>
+              </div>
+
+              <div class="form-grid two-col">
+                <div class="field">
+                  <label for="fService">خدمت مورد نظر *</label>
+                  <select id="fService" name="service" required>
+                    <option value="فیلر و کانتورینگ چهره">فیلر و کانتورینگ چهره (چانه، لب، زاویه‌سازی)</option>
+                    <option value="لیزر موهای زائد (Soprano Titanium)">لیزر موهای زائد (Soprano Titanium)</option>
+                    <option value="بوتاکس تخصصی">بوتاکس تخصصی</option>
+                    <option value="هیر فیلر و تقویت مو">هیر فیلر و درمان ریزش مو</option>
+                    <option value="فیشیال و جوانساز زیر چشم">فیشیال و جوانساز زیر چشم</option>
+                    <option value="لاغری، اسپارتینا و لیفت">لاغری، اسپارتینا و لیفت</option>
+                    <option value="مشاوره عمومی پوست و مو">مشاوره تخصصی پوست و مو</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="fTime">زمان ترجیحی تماس / مراجعه</label>
+                  <select id="fTime" name="preferredTime">
+                    <option value="تماس در اولین فرصت">تماس در اولین فرصت</option>
+                    <option value="شیفت صبح">شیفت صبح</option>
+                    <option value="شیفت عصر">شیفت عصر</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-grid">
+                <div class="field">
+                  <label for="fNotes">توضیحات یا سؤال شما (اختیاری)</label>
+                  <textarea id="fNotes" name="notes" rows="3" placeholder="اگر درباره ناحیه تزریق، تیپ پوستی یا سابقه لیزر نکته‌ای هست بنویسید..."></textarea>
+                </div>
+              </div>
+
+              <div style="margin-top:16px;">
+                <button type="submit" class="btn-gold" id="submitBookingBtn" style="width:100%;">ثبت درخواست نوبت و دریافت کد پیگیری</button>
+              </div>
+              <div class="booking-result" id="bookingResult" role="status"></div>
+            </form>
+          </div>
+
+          <div class="contact-card glass reveal">
+            <h3 style="font-size:1.25rem; font-weight:900; margin-bottom:14px;">تماس مستقیم و نشانی کلینیک</h3>
+
+            <div class="phone-row">
+              <a href="tel:+989201827726">
+                <span class="phone-badge">۱</span>
+                <span dir="ltr">۰۹۲۰ ۱۸۲ ۷۷۲۶</span>
+              </a>
+              <button type="button" class="copy-mini" data-copy="09201827726">کپی شماره</button>
+            </div>
+
+            <div class="phone-row">
+              <a href="tel:+989001827726">
+                <span class="phone-badge">۲</span>
+                <span dir="ltr">۰۹۰۰ ۱۸۲ ۷۷۲۶</span>
+              </a>
+              <button type="button" class="copy-mini" data-copy="09001827726">کپی شماره</button>
+            </div>
+
+            <div style="margin-top:18px; padding:15px; border-radius:16px; background:var(--glass-soft); border:1px solid var(--glass-border);">
+              <div style="font-size:0.82rem; color:var(--gold-light); font-weight:800; margin-bottom:5px;">📍 نشانی دقیق کلینیک زیبایی مه تو</div>
+              <p style="font-size:0.89rem; color:var(--text-soft);">
+                مازندران، بابل، خورشیدکلا، بلوار جانبازان، میدان شهید سجودی، ساختمان مازیار، طبقهٔ ۷، واحد ۲۹
+              </p>
+              <div class="map-btns">
+                <a href="${neshanUrl}" target="_blank" rel="noopener noreferrer" class="btn-glass" style="padding:10px 12px; font-size:0.82rem;">مسیریابی در نشان</a>
+                <a href="${gmapsUrl}" target="_blank" rel="noopener noreferrer" class="btn-glass" style="padding:10px 12px; font-size:0.82rem;">مسیریابی گوگل مپ</a>
+              </div>
+            </div>
+
+            <div style="margin-top:18px;">
+              <div style="font-size:0.82rem; font-weight:800; color:var(--gold-light); margin-bottom:8px;">شبکه‌های اجتماعی و پیام‌رسان‌های رسمی</div>
+              <div class="social-grid">
+                <a href="${igUrl}" target="_blank" rel="noopener noreferrer" class="social-pill">📸 اینستاگرام</a>
+                <a href="${tgUrl}" target="_blank" rel="noopener noreferrer" class="social-pill">✈ تلگرام</a>
+                <a href="${eitaaUrl}" target="_blank" rel="noopener noreferrer" class="social-pill">🟠 ایتا</a>
+                <a href="${baleUrl}" target="_blank" rel="noopener noreferrer" class="social-pill">🟢 بله</a>
+                <a href="${rubikaUrl}" target="_blank" rel="noopener noreferrer" class="social-pill">🟣 روبیکا</a>
+                <a href="/admin" class="social-pill">🔐 پنل پذیرش</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="container">
+        <div style="font-weight:900; font-size:1.08rem; margin-bottom:4px;">کلینیک زیبایی مه تو · MAHTO CLINIC</div>
+        <div style="font-size:0.84rem; color:var(--muted);">دکتر توحید اسماعیلی · پوست، مو، لیزر و لاغری · بابل · نظام پزشکی ۲۳۰۲۴۹</div>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Desktop 3D Scene HUD -->
+  <div class="hud-3d" aria-label="کنترلر صحنه سه‌بعدی">
+    <button type="button" class="hud-btn" id="hudBurstBtn">🌸 بارش شکوفه</button>
+    <button type="button" class="hud-btn" id="hudPauseBtn">⏸ توقف ۳بعدی</button>
+  </div>
+
+  <!-- Mobile Floating Dock -->
+  <div class="mobile-dock" aria-label="دسترسی سریع موبایل">
+    <a href="tel:+989201827726" class="dock-item">📞 تماس</a>
+    <a href="#booking" class="dock-item primary">✦ رزرو نوبت</a>
+    <a href="${neshanUrl}" target="_blank" rel="noopener noreferrer" class="dock-item">📍 مسیریابی</a>
+  </div>
+
+  <!-- Fullscreen Lightbox Modal (Photos + Videos) -->
+  <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="نمایش رسانه">
+    <button type="button" class="lb-close" id="lbClose" aria-label="بستن">✕</button>
+    <div class="lb-box">
+      <div class="lb-media" id="lbMedia"></div>
+      <div class="lb-content">
+        <div>
+          <span class="eyebrow" id="lbCat" style="margin-bottom:10px;"></span>
+          <h3 id="lbTitle" style="font-size:1.18rem; font-weight:900; margin-bottom:10px; color:#f6e0aa; line-height:1.45;"></h3>
+          <p id="lbDesc" style="font-size:0.91rem; color:#ead4e0; line-height:1.95; white-space:pre-line;"></p>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:10px;">
+          <button type="button" class="btn-gold" id="lbBookBtn" style="flex:1;">مشاوره رایگان برای این خدمت</button>
+          <a href="${igUrl}" target="_blank" rel="noopener noreferrer" class="btn-glass">صفحه اینستاگرام</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <script>
+  (function () {
+    const IG_EXTRA = ${igExtraJson};
+
+    const BASE_GALLERY = [
+      { src: "/assets/mahto/welcome.jpg", cat: "skin", catLabel: "معرفی کلینیک مه تو", title: "به دنیای زیبایی و درخشندگی مه تو خوش آمدید", service: "مشاوره عمومی پوست و مو", desc: "اینجا کلینیک مه تو است؛ جایی که علم و هنر زیبایی در کنار هم، جلوه‌ای تازه به چهره‌تان می‌بخشد. زیبایی، حق شماست و ما در مه تو آن را محقق می‌کنیم." },
+      { src: "/assets/mahto/chin-filler.jpg", cat: "inject", catLabel: "فیلر و کانتورینگ", title: "فیلر چانه؛ ظریف‌ترین و تأثیرگذارترین کانتورینگ چهره", service: "فیلر و کانتورینگ چهره", desc: "فیلر چانه یکی از ظریف‌ترین ولی تأثیرگذارترین خدمات زیبایی است؛ چون می‌تواند بدون تغییر اغراق‌آمیز، به صورت فرم بهتر و تناسب جذاب‌تری بدهد." },
+      { src: "/assets/mahto/laser-before-after.jpg", cat: "laser", catLabel: "نتیجه واقعی لیزر", title: "صافی پوست بعد از جلسات لیزر سوپرانو تیتانیوم", service: "لیزر موهای زائد (Soprano Titanium)", desc: "قبل و بعد را ببینید: پوست صاف‌تر، بدون موهای زائد، بدون موهای زیرپوستی و دون‌دون‌های آزاردهنده. وقتی لیزر با دستگاه مناسب و تنظیمات درست انجام شود، نتیجه تمیزتر و پوست نرم‌تر دیده می‌شود." },
+      { src: "/assets/mahto/soprano-tech.jpg", cat: "laser", catLabel: "تکنولوژی لیزر", title: "دستگاه Soprano Titanium — جدیدترین نسل لیزر دنیا", service: "لیزر موهای زائد (Soprano Titanium)", desc: "اگر دنبال یک لیزر بدون درد و با ماندگاری بالا هستید، Soprano Titanium ترکیبی از قدرت، سرعت و راحتی است؛ مناسب برای تمام تیپ‌های پوستی، حتی پوست‌های سبزه." },
+      { src: "/assets/mahto/undereye.jpg", cat: "skin", catLabel: "جوانسازی و فیشیال", title: "جادوی جوانساز زیر چشم؛ خداحافظی با چهره خسته", service: "فیشیال و جوانساز زیر چشم", desc: "تیرگی زیر چشم، خطوط ریز و بافت شل پوست می‌توانند حتی بعد از یک خواب خوب، چهره را خسته نشان دهند. جوانساز زیر چشم ترکیبی دقیق از مواد تقویت‌کننده برای روشن‌تر شدن، استحکام و کاهش چروک‌های سطحی است." },
+      { src: "/assets/mahto/hair-filler-1.jpg", cat: "skin", catLabel: "درمان تخصصی مو", title: "برای درمان ریزش مو، هیر فیلر کاملاً جواب است", service: "هیر فیلر و تقویت مو", desc: "پروتکل تخصصی هیر فیلر در کلینیک مه تو زیر نظر پزشک، برای تقویت ریشه مو، کاهش ریزش و بازگرداندن شادابی به موهای کم‌پشت." },
+      { src: "/assets/mahto/botox-care.jpg", cat: "inject", catLabel: "بوتاکس تخصصی", title: "مراقبت‌های طلایی بعد از تزریق بوتاکس", service: "بوتاکس تخصصی", desc: "تا ۴ ساعت دراز نکشید و سر را پایین نگیرید، محل تزریق را ماساژ ندهید، تا ۲۴ ساعت ورزش سنگین، الکل و حمام یا سونای داغ ممنوع است. رعایت همین نکات ساده نتیجه را طبیعی‌تر و ماندگارتر می‌کند." },
+      { src: "/assets/mahto/filler-myth.jpg", cat: "inject", catLabel: "دانستنی علمی فیلر", title: "آیا فیلر باعث افتادگی پوست می‌شود؟", service: "فیلر و کانتورینگ چهره", desc: "اگر فیلر مناسب با تکنیک درست و در ناحیه صحیح تزریق شود، باعث افتادگی پوست نمی‌شود. چیزی که گاهی ظاهر غیرطبیعی ایجاد می‌کند، تزریق بیش از حد (Overfilling) یا انتخاب نادرست ناحیه تزریق است." },
+      { src: "/assets/mahto/laser-protocol.jpg", cat: "laser", catLabel: "پروتکل اختصاصی", title: "تنظیمات لیزر برای همه افراد یکسان نیست", service: "لیزر موهای زائد (Soprano Titanium)", desc: "نتیجه عالی از یک تنظیم درست شروع می‌شود؛ هر پوست و هر ضخامت مو پروتکل مخصوص خودش را دارد که در کلینیک مه تو به‌صورت اختصاصی تنظیم می‌شود." },
+      { src: "/assets/mahto/laser-cycle.jpg", cat: "laser", catLabel: "دانستنی لیزر", title: "چرا نباید جلسات لیزر را زودتر از موعد انجام داد؟", service: "لیزر موهای زائد (Soprano Titanium)", desc: "موهای بدن ۳ مرحله رشد دارند و لیزر فقط روی موهایی اثر می‌کند که در مرحله رشد فعال (آناژن) هستند. نظم در جلسات مساوی است با نتیجه قطعی و صرفه‌جویی در وقت و هزینه." },
+      { src: "/assets/mahto/hair-filler-2.jpg", cat: "skin", catLabel: "تقویت فولیکول مو", title: "۷ مزیت علمی تزریق هیر فیلر برای موها", service: "هیر فیلر و تقویت مو", desc: "تقویت فولیکول‌های مو، کاهش ریزش، کمک به تحریک رشد مجدد، افزایش ضخامت و استحکام مو، بهبود کیفیت پوست سر و تغذیه بهتر ریشه موهای ضعیف و آسیب‌دیده." },
+      { src: "/assets/mahto/soprano-intro.jpg", cat: "laser", catLabel: "آشنایی با دستگاه", title: "با دستگاه سوپرانو تیتانیوم بیشتر آشنا شوید", service: "لیزر موهای زائد (Soprano Titanium)", desc: "تجربه لیزر مدرن، ایمن و سریع در محیط آرام و استاندارد کلینیک زیبایی مه تو بابل." },
+      { src: "/assets/mahto/brand-logo.jpg", cat: "skin", catLabel: "هویت برند مه تو", title: "کلینیک زیبایی مه تو — دکتر توحید اسماعیلی", service: "مشاوره عمومی پوست و مو", desc: "مرکز تخصصی خدمات پوست، مو، فیلر و بوتاکس، لیزر، لیفت، فیشیال و لاغری در بابل." },
+    ];
+
+    const GALLERY_ITEMS = [
+      ...IG_EXTRA.map((ig, i) => ({
+        src: ig.key,
+        videoSrc: ig.videoKey || null,
+        cat: "inject",
+        catLabel: ig.isVideo ? "ریلز اینستاگرام" : "پست اینستاگرام",
+        title: (ig.caption || "پست رسمی @mahto_clinic").split("\\n")[0].slice(0, 70),
+        service: "مشاوره عمومی پوست و مو",
+        desc: ig.caption || "منتشرشده در صفحه رسمی اینستاگرام کلینیک زیبایی مه تو",
+      })),
+      ...BASE_GALLERY,
+    ];
+
+    const STORIES = [
+      { label: "ویدیو کلینیک", thumb: "/assets/mahto/clinic-reel-poster.jpg", fallback: "/assets/mahto/welcome.jpg", videoSrc: "/assets/mahto/clinic-reel.mp4", catLabel: "ویدیوی رسمی کلینیک مه تو", title: "آرامش و زیبایی در کلینیک مه تو", service: "مشاوره عمومی پوست و مو", desc: "آرزو می‌کنیم کلبه‌ی دلتان همیشه آرام باشد و شادی و برکت مثل باران رحمت از آسمان برایتان ببارد. — کلینیک زیبایی مه تو بابل" },
+      { label: "قبل و بعد لیزر", thumb: "/assets/mahto/laser-before-after.jpg", itemIdx: 2 },
+      { label: "فیلر چانه", thumb: "/assets/mahto/chin-filler.jpg", itemIdx: 1 },
+      { label: "سوپرانو تیتانیوم", thumb: "/assets/mahto/soprano-tech.jpg", itemIdx: 3 },
+      { label: "جوانساز چشم", thumb: "/assets/mahto/undereye.jpg", itemIdx: 4 },
+      { label: "هیر فیلر", thumb: "/assets/mahto/hair-filler-1.jpg", itemIdx: 5 },
+      { label: "مراقبت بوتاکس", thumb: "/assets/mahto/botox-care.jpg", itemIdx: 6 },
+      { label: "دانستنی فیلر", thumb: "/assets/mahto/filler-myth.jpg", itemIdx: 7 },
+    ];
+
+    const PROTOCOLS = [
+      { title: "پروتکل اختصاصی هر تیپ پوستی (روشن تا سبزه)", body: "تنظیمات لیزر برای همه افراد یکسان نیست؛ دستگاه Soprano Titanium در کلینیک مه تو با تنظیم اختصاصی انرژی و خنک‌کننده قوی، بدون درد و سوختگی روی تمام تیپ‌های پوستی حتی پوست‌های سبزه بیشترین بازدهی را دارد." },
+      { title: "رعایت علمی چرخه رشد فعال مو (فاز آناژن)", body: "موهای بدن ۳ مرحله رشد دارند و لیزر فقط روی ریشه‌های فعال در فاز آناژن اثر می‌گذارد. انجام زودتر از موعد جلسات نتیجه‌ای ندارد؛ نظم در جلسات مطابق برنامه کلینیک، ضامن نتیجه قطعی و صافی پوست است." },
+      { title: "بررسی هورمونی و پایش پزشک کنار لیزر", body: "گاهی دلیل برگشت مو در برخی افراد نه دستگاه است و نه تعداد جلسات، بلکه هورمون‌های فعال مثل تخمدان پلی‌کیستیک (PCOS)، استرس بالا یا مصرف برخی داروهاست. در مه تو، پایش پزشک در کنار لیزر نتیجه را چند برابر بهتر می‌کند." },
+    ];
+
+    const WIZARD = [
+      { label: "✨ فرم‌دهی طبیعی و فیلر", service: "فیلر و کانتورینگ چهره", advice: "پیشنهاد دکتر اسماعیلی: ارزیابی هارمونی صورت و تزریق ظریف فیلر (چانه، لب یا زاویه‌سازی) با دوز استاندارد و بدون Overfilling." },
+      { label: "⚡ لیزر بدون درد و صافی پوست", service: "لیزر موهای زائد (Soprano Titanium)", advice: "پیشنهاد کلینیک مه تو: تنظیم اختصاصی دستگاه Soprano Titanium متناسب با تیپ پوستی شما و برنامه‌ریزی منظم بر اساس فاز آناژن." },
+      { label: "🌿 کاهش ریزش و تقویت مو", service: "هیر فیلر و تقویت مو", advice: "پیشنهاد کلینیک مه تو: پروتکل هیر فیلر تخصصی برای تغذیه فولیکول، کاهش ریزش و افزایش ضخامت موهای کم‌پشت." },
+      { label: "👁 رفع تیرگی و خستگی زیر چشم", service: "فیشیال و جوانساز زیر چشم", advice: "پیشنهاد کلینیک مه تو: جوانساز اختصاصی زیر چشم برای روشن‌تر شدن بافت پوست و کاهش خطوط ظریف همراه با فیشیال تخصصی." },
+      { label: "💎 رفع خطوط پیشانی و اخم", service: "بوتاکس تخصصی", advice: "پیشنهاد کلینیک مه تو: تزریق دقیق بوتاکس با حفظ طبیعی میمیک چهره و پیگیری کامل مراقبت‌های طلایی ۲۴ ساعت اول." },
+      { label: "🌙 لاغری، اسپارتینا و لیفت", service: "لاغری، اسپارتینا و لیفت", advice: "پیشنهاد کلینیک مه تو: مشاوره تخصصی لاغری تحت نظر پزشک (پروتکل اسپارتینا) و متدهای ایمن لیفت غیرجراحی." },
+    ];
+
+    // Toast
+    const toastEl = document.getElementById("toast");
+    let toastTimer = null;
+    function showToast(msg) {
+      toastEl.textContent = msg;
+      toastEl.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toastEl.classList.remove("show"), 2600);
+    }
+
+    // Theme Switcher
+    const themeToggle = document.getElementById("themeToggle");
+    let currentTheme = localStorage.getItem("mahto_theme") || "dark";
+    function applyTheme(t) {
+      currentTheme = t;
+      document.documentElement.setAttribute("data-theme", t);
+      themeToggle.textContent = t === "dark" ? "☀" : "🌙";
+      try { localStorage.setItem("mahto_theme", t); } catch {}
+    }
+    applyTheme(currentTheme);
+    themeToggle.addEventListener("click", () => applyTheme(currentTheme === "dark" ? "light" : "dark"));
+
+    // =========================================================================
+    // 3-SLIDE TOP HERO SLIDER ENGINE (Autoplay + Progress Bar + Swipe + Hover Pause)
+    // =========================================================================
+    const sliderFrame = document.getElementById("heroSliderFrame");
+    const slides = Array.from(document.querySelectorAll(".hero-slide"));
+    const tabs = Array.from(document.querySelectorAll(".slide-tab"));
+    let slideIdx = 0;
+    let slideTimer = null;
+    let sliderHovered = false;
+
+    function goSlide(next) {
+      slideIdx = (next + slides.length) % slides.length;
+      slides.forEach((s, i) => s.classList.toggle("active", i === slideIdx));
+      tabs.forEach((tb, i) => {
+        const isAct = i === slideIdx;
+        tb.classList.toggle("active", isAct);
+        tb.setAttribute("aria-selected", isAct ? "true" : "false");
+        const bar = tb.querySelector(".slide-progress");
+        if (bar) { bar.style.animation = "none"; void bar.offsetWidth; bar.style.animation = ""; }
+      });
+      restartSlideTimer();
+    }
+
+    function restartSlideTimer() {
+      clearInterval(slideTimer);
+      slideTimer = setInterval(() => {
+        if (!sliderHovered && !document.hidden) goSlide(slideIdx + 1);
+      }, 6500);
+    }
+
+    tabs.forEach((tb) => tb.addEventListener("click", () => goSlide(Number(tb.dataset.goto))));
+    document.getElementById("heroNext")?.addEventListener("click", () => goSlide(slideIdx + 1));
+    document.getElementById("heroPrev")?.addEventListener("click", () => goSlide(slideIdx - 1));
+
+    sliderFrame?.addEventListener("mouseenter", () => { sliderHovered = true; sliderFrame.classList.add("is-paused"); });
+    sliderFrame?.addEventListener("mouseleave", () => { sliderHovered = false; sliderFrame.classList.remove("is-paused"); });
+
+    let heroDragX = null;
+    sliderFrame?.addEventListener("pointerdown", (e) => { heroDragX = e.clientX; });
+    sliderFrame?.addEventListener("pointerup", (e) => {
+      if (heroDragX === null) return;
+      const dx = e.clientX - heroDragX;
+      if (Math.abs(dx) > 48) goSlide(slideIdx + (dx > 0 ? -1 : 1));
+      heroDragX = null;
+    });
+    restartSlideTimer();
+
+    // Render Stories Highlights Row
+    const storiesRow = document.getElementById("storiesRow");
+    if (storiesRow) {
+      STORIES.forEach((st) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "story-pill";
+        btn.innerHTML = '<div class="story-ring"><img src="' + st.thumb + '" alt="' + st.label + '" /></div><div class="story-label">' + st.label + '</div>';
+        const im = btn.querySelector("img");
+        if (st.fallback) im.onerror = () => { im.src = st.fallback; };
+        btn.addEventListener("click", () => {
+          if (st.videoSrc) openLightbox({ videoSrc: st.videoSrc, src: st.thumb, catLabel: st.catLabel, title: st.title, service: st.service, desc: st.desc });
+          else openLightbox(BASE_GALLERY[st.itemIdx] || BASE_GALLERY[0]);
+        });
+        storiesRow.appendChild(btn);
+      });
+    }
+
+    // Pointer Fresnel & 3D Tilt
+    const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!reduced) {
+      document.querySelectorAll(".glass").forEach((el) => {
+        el.addEventListener("pointermove", (e) => {
+          const r = el.getBoundingClientRect();
+          el.style.setProperty("--mx", (((e.clientX - r.left) / r.width) * 100).toFixed(1) + "%");
+          el.style.setProperty("--my", (((e.clientY - r.top) / r.height) * 100).toFixed(1) + "%");
+        }, { passive: true });
+      });
+      document.querySelectorAll(".tilt-3d").forEach((card) => {
+        card.addEventListener("pointermove", (e) => {
+          const r = card.getBoundingClientRect();
+          const nx = (e.clientX - r.left) / r.width - 0.5;
+          const ny = (e.clientY - r.top) / r.height - 0.5;
+          card.style.transform = "perspective(950px) rotateY(" + (nx * 9).toFixed(2) + "deg) rotateX(" + (-ny * 9).toFixed(2) + "deg) translateY(-4px)";
+        }, { passive: true });
+        card.addEventListener("pointerleave", () => { card.style.transform = ""; });
+      });
+    }
+
+    // Smart Consultation Wizard
+    const wizChips = document.getElementById("wizardChips");
+    const wizAdvice = document.getElementById("wizardAdvice");
+    let wizCurrent = WIZARD[0];
+    WIZARD.forEach((w, idx) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "wiz-chip" + (idx === 0 ? " active" : "");
+      b.textContent = w.label;
+      b.addEventListener("click", () => {
+        wizChips.querySelectorAll(".wiz-chip").forEach((x) => x.classList.remove("active"));
+        b.classList.add("active");
+        wizCurrent = w;
+        wizAdvice.textContent = w.advice;
+      });
+      wizChips.appendChild(b);
+    });
+    wizAdvice.textContent = wizCurrent.advice;
+    document.getElementById("wizardApplyBtn")?.addEventListener("click", () => selectServiceAndScroll(wizCurrent.service));
+
+    // Protocol Tabs
+    const protoPanel = document.getElementById("protoPanel");
+    document.querySelectorAll(".proto-tab").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".proto-tab").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        const p = PROTOCOLS[Number(btn.dataset.proto)] || PROTOCOLS[0];
+        protoPanel.innerHTML = "<strong>" + p.title + "</strong>" + p.body;
+      });
+    });
+
+    // 3D Coverflow Gallery
+    const cfStage = document.getElementById("coverflowStage");
+    const cfCounter = document.getElementById("cfCounter");
+    const gridEl = document.getElementById("galleryGridMode");
+    const stageShell = document.getElementById("stage3dShell");
+    const toggleViewBtn = document.getElementById("toggleViewMode");
+    let filteredItems = [...GALLERY_ITEMS];
+    let activeIdx = 0;
+    let isGrid = false;
+    const toFaNum = (n) => String(n).replace(/\\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[d]);
+
+    function renderGallery() {
+      cfStage.innerHTML = "";
+      gridEl.innerHTML = "";
+      if (activeIdx >= filteredItems.length) activeIdx = 0;
+
+      filteredItems.forEach((item, idx) => {
+        const card = document.createElement("div");
+        card.className = "cf-card";
+        card.innerHTML = '<img src="' + item.src + '" alt="' + item.title + '" loading="lazy" /><div class="cf-overlay"><span class="cf-cat">' + item.catLabel + '</span><div class="cf-title">' + item.title + '</div><div class="cf-excerpt">' + item.desc + '</div></div>';
+        card.addEventListener("click", () => {
+          if (idx === activeIdx) openLightbox(item);
+          else { activeIdx = idx; layoutCoverflow(); }
+        });
+        cfStage.appendChild(card);
+
+        const gi = document.createElement("div");
+        gi.className = "grid-item";
+        gi.innerHTML = '<img src="' + item.src + '" alt="' + item.title + '" loading="lazy" /><div class="cf-overlay"><span class="cf-cat">' + item.catLabel + '</span><div class="cf-title">' + item.title + '</div></div>';
+        gi.addEventListener("click", () => openLightbox(item));
+        gridEl.appendChild(gi);
+      });
+      layoutCoverflow();
+    }
+
+    function layoutCoverflow() {
+      const cards = cfStage.querySelectorAll(".cf-card");
+      const total = cards.length;
+      const spread = window.innerWidth < 640 ? 150 : 228;
+      cards.forEach((card, i) => {
+        let diff = i - activeIdx;
+        if (diff > total / 2) diff -= total;
+        if (diff < -total / 2) diff += total;
+        const abs = Math.abs(diff);
+        if (abs > 3) {
+          card.style.opacity = "0"; card.style.pointerEvents = "none";
+          card.style.transform = "translate3d(" + (diff > 0 ? 500 : -500) + "px, 0, -400px) scale(0.55)";
+          return;
+        }
+        const tx = diff * spread;
+        const tz = -abs * 125 + (abs === 0 ? 74 : 0);
+        const ry = -diff * 32;
+        const sc = Math.max(0.68, 1 - abs * 0.13);
+        card.style.zIndex = String(20 - abs);
+        card.style.opacity = abs === 0 ? "1" : String(Math.max(0.32, 0.9 - abs * 0.24));
+        card.style.filter = abs === 0 ? "none" : "brightness(" + Math.max(0.55, 1 - abs * 0.18) + ")";
+        card.style.pointerEvents = "auto";
+        card.style.transform = "translate3d(" + tx + "px, 0, " + tz + "px) rotateY(" + ry + "deg) scale(" + sc + ")";
+      });
+      cfCounter.textContent = toFaNum(activeIdx + 1) + " / " + toFaNum(total);
+    }
+
+    const stepCf = (delta) => {
+      if (!filteredItems.length) return;
+      activeIdx = (activeIdx + delta + filteredItems.length) % filteredItems.length;
+      layoutCoverflow();
+    };
+    document.getElementById("cfNext").addEventListener("click", () => stepCf(1));
+    document.getElementById("cfPrev").addEventListener("click", () => stepCf(-1));
+    window.addEventListener("resize", layoutCoverflow, { passive: true });
+
+    let dragStartX = null;
+    cfStage.addEventListener("pointerdown", (e) => { dragStartX = e.clientX; });
+    cfStage.addEventListener("pointerup", (e) => {
+      if (dragStartX === null) return;
+      const dx = e.clientX - dragStartX;
+      if (Math.abs(dx) > 40) stepCf(dx > 0 ? -1 : 1);
+      dragStartX = null;
+    });
+
+    document.querySelectorAll(".filter-pill[data-cat]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".filter-pill[data-cat]").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        const cat = btn.dataset.cat;
+        filteredItems = cat === "all" ? [...GALLERY_ITEMS] : GALLERY_ITEMS.filter((x) => x.cat === cat);
+        activeIdx = 0;
+        renderGallery();
+      });
+    });
+
+    toggleViewBtn.addEventListener("click", () => {
+      isGrid = !isGrid;
+      stageShell.classList.toggle("hidden", isGrid);
+      gridEl.classList.toggle("active", isGrid);
+      toggleViewBtn.textContent = isGrid ? "نمای سه‌بعدی 3D ✦" : "نمای شبکه‌ای ▦";
+    });
+    renderGallery();
+
+    // Lightbox (Supports Photos & MP4 Reels)
+    const lightbox = document.getElementById("lightbox");
+    const lbMedia = document.getElementById("lbMedia");
+    const lbCat = document.getElementById("lbCat");
+    const lbTitle = document.getElementById("lbTitle");
+    const lbDesc = document.getElementById("lbDesc");
+    const lbBookBtn = document.getElementById("lbBookBtn");
+    let lbCurrentService = "مشاوره عمومی پوست و مو";
+
+    function openLightbox(item) {
+      lbMedia.innerHTML = item.videoSrc
+        ? '<video controls autoplay playsinline poster="' + (item.src || "") + '"><source src="' + item.videoSrc + '" type="video/mp4" /></video>'
+        : '<img src="' + item.src + '" alt="' + item.title + '" />';
+      lbCat.textContent = item.catLabel || "کلینیک زیبایی مه تو";
+      lbTitle.textContent = item.title;
+      lbDesc.textContent = item.desc || "";
+      lbCurrentService = item.service || "مشاوره عمومی پوست و مو";
+      lightbox.classList.add("open");
+    }
+    function closeLightbox() { lightbox.classList.remove("open"); lbMedia.innerHTML = ""; }
+    document.getElementById("lbClose").addEventListener("click", closeLightbox);
+    lightbox.addEventListener("click", (e) => { if (e.target === lightbox) closeLightbox(); });
+    window.addEventListener("keydown", (e) => { if (e.key === "Escape") closeLightbox(); });
+    lbBookBtn.addEventListener("click", () => { closeLightbox(); selectServiceAndScroll(lbCurrentService); });
+
+    document.getElementById("openBeforeAfterBtn")?.addEventListener("click", () => {
+      const ba = BASE_GALLERY.find((i) => i.src.includes("before-after"));
+      if (ba) openLightbox(ba);
+    });
+    document.querySelectorAll(".vault-thumb").forEach((el) => {
+      el.addEventListener("click", () => {
+        const found = BASE_GALLERY.find((i) => i.src === el.dataset.openImg);
+        if (found) openLightbox(found);
+      });
+    });
+
+    function selectServiceAndScroll(svc) {
+      const sel = document.getElementById("fService");
+      if (sel) {
+        for (const opt of sel.options) {
+          if (opt.value === svc) { sel.value = svc; break; }
+        }
+      }
+      document.getElementById("booking")?.scrollIntoView({ behavior: "smooth" });
+      showToast("خدمت «" + svc + "» در فرم نوبت‌دهی انتخاب شد");
+    }
+    document.body.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-select-service]");
+      if (btn) selectServiceAndScroll(btn.dataset.selectService);
+    });
+
+    document.querySelectorAll("[data-copy]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        try { await navigator.clipboard.writeText(btn.dataset.copy); showToast("شماره تماس با موفقیت کپی شد"); }
+        catch { showToast("شماره: " + btn.dataset.copy); }
+      });
+    });
+
+    document.getElementById("saveVcardBtn")?.addEventListener("click", () => {
+      const vcard = [
+        "BEGIN:VCARD", "VERSION:3.0",
+        "N:اسماعیلی;توحید;دکتر;;",
+        "FN:کلینیک زیبایی مه تو — دکتر توحید اسماعیلی",
+        "ORG:کلینیک زیبایی مه تو | MAHTO CLINIC",
+        "TEL;TYPE=CELL,VOICE,PREF:+989201827726",
+        "TEL;TYPE=CELL,VOICE:+989001827726",
+        "ADR;TYPE=WORK:;;خورشیدکلا، بلوار جانبازان، میدان شهید سجودی، ساختمان مازیار، طبقه ۷، واحد ۲۹;بابل;مازندران;;ایران",
+        "NOTE:پوست، مو، لیزر سوپرانو تیتانیوم، فیلر و بوتاکس، هیر فیلر، فیشیال و لاغری",
+        "END:VCARD",
+      ].join("\\r\\n");
+      const blob = new Blob(["\\uFEFF" + vcard], { type: "text/vcard;charset=utf-8" });
+      const u = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = u; a.download = "mahto-clinic.vcf"; a.click();
+      setTimeout(() => URL.revokeObjectURL(u), 1500);
+      showToast("کارت مخاطب کلینیک ذخیره شد");
+    });
+
+    document.getElementById("shareSiteBtn")?.addEventListener("click", async () => {
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: "کلینیک زیبایی مه تو | MAHTO CLINIC", text: "کلینیک زیبایی مه تو — دکتر توحید اسماعیلی (بابل)", url: location.href });
+          return;
+        } catch {}
+      }
+      try { await navigator.clipboard.writeText(location.href); showToast("لینک سایت کپی شد"); } catch {}
+    });
+
+    // D1 Booking Form
+    const bookingForm = document.getElementById("bookingForm");
+    const bookingResult = document.getElementById("bookingResult");
+    const submitBtn = document.getElementById("submitBookingBtn");
+    bookingForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      submitBtn.disabled = true;
+      submitBtn.textContent = "در حال ثبت درخواست...";
+      bookingResult.className = "booking-result";
+      try {
+        const payload = {
+          fullName: document.getElementById("fName").value.trim(),
+          phone: document.getElementById("fPhone").value.trim(),
+          service: document.getElementById("fService").value,
+          preferredTime: document.getElementById("fTime").value,
+          notes: document.getElementById("fNotes").value.trim(),
+        };
+        const res = await fetch("/api/appointments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "خطا در ثبت اطلاعات");
+        bookingResult.innerHTML =
+          '<div style="font-weight:900;color:#86efac;margin-bottom:4px;">✦ درخواست شما با موفقیت ثبت شد!</div>' +
+          '<div style="font-size:0.88rem;">کد پیگیری شما: <strong dir="ltr" style="color:#f6e0aa;">' + data.appointment.code + '</strong></div>' +
+          '<div style="font-size:0.83rem;margin-top:4px;opacity:0.9;">کارشناسان کلینیک زیبایی مه تو در اسرع وقت برای هماهنگی زمان دقیق با شما تماس می‌گیرند.</div>';
+        bookingResult.classList.add("show");
+        bookingForm.reset();
+        showToast("نوبت شما با کد " + data.appointment.code + " ثبت شد");
+        triggerBurst();
+      } catch (err) {
+        bookingResult.textContent = err.message || "خطا در ارسال درخواست";
+        bookingResult.classList.add("show", "err");
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "ثبت درخواست نوبت و دریافت کد پیگیری";
+      }
+    });
+
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((en) => {
+        if (en.isIntersecting) { en.target.classList.add("visible"); io.unobserve(en.target); }
+      });
+    }, { threshold: 0.1 });
+    document.querySelectorAll(".reveal").forEach((el) => io.observe(el));
+
+    // =========================================================================
+    // SIGNATURE 3D SCULPTURAL ENGINE (Preserved & Upgraded with Front/Back Depth)
+    // =========================================================================
+    const canvas = document.getElementById("universe3D");
+    const ctx = canvas.getContext("2d");
+    let W = window.innerWidth, H = window.innerHeight, dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let paused = false;
+
+    function resize3D() {
+      W = window.innerWidth; H = window.innerHeight;
+      canvas.width = Math.floor(W * dpr); canvas.height = Math.floor(H * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    resize3D();
+    window.addEventListener("resize", resize3D, { passive: true });
+
+    const crescentPts = [];
+    const steps = 48;
+    for (let i = 0; i <= steps; i++) {
+      const a = 0.5 + (i / steps) * (Math.PI * 2 - 1.0);
+      crescentPts.push({ x: Math.cos(a) * 190, y: Math.sin(a) * 190 });
+    }
+    for (let i = steps; i >= 0; i--) {
+      const a = 0.66 + (i / steps) * (Math.PI * 2 - 1.32);
+      crescentPts.push({ x: 58 + Math.cos(a) * 148, y: -8 + Math.sin(a) * 148 });
+    }
+
+    function makeRing(radius, tiltX, tiltY, count) {
+      const pts = [];
+      for (let i = 0; i < count; i++) {
+        const a = (i / count) * Math.PI * 2;
+        let x = Math.cos(a) * radius, y = Math.sin(a) * radius, z = 0;
+        const y1 = y * Math.cos(tiltX) - z * Math.sin(tiltX);
+        const z1 = y * Math.sin(tiltX) + z * Math.cos(tiltX);
+        const x2 = x * Math.cos(tiltY) + z1 * Math.sin(tiltY);
+        const z2 = -x * Math.sin(tiltY) + z1 * Math.cos(tiltY);
+        pts.push({ x: x2, y: y1, z: z2 });
+      }
+      return pts;
+    }
+    const ringA = makeRing(260, 1.08, 0.36, 80);
+    const ringB = makeRing(312, -0.92, 0.58, 80);
+
+    const pearls = Array.from({ length: 14 }, (_, i) => ({
+      ang: (i / 14) * Math.PI * 2, rad: 215 + (i % 3) * 58, zAmp: 125 + (i % 4) * 35,
+      size: 6 + (i % 3) * 3.6, speed: 0.22 + (i % 4) * 0.08, rose: i % 2 === 0,
+    }));
+
+    const petals3D = Array.from({ length: W < 640 ? 50 : 92 }, () => ({
+      x: (Math.random() - 0.5) * 1500, y: (Math.random() - 0.5) * 980, z: (Math.random() - 0.5) * 720,
+      vy: 0.34 + Math.random() * 0.58, vx: -0.25 - Math.random() * 0.38,
+      rot: Math.random() * Math.PI * 2, vRot: (Math.random() - 0.5) * 0.02,
+      size: 5.5 + Math.random() * 7.8, isGold: Math.random() < 0.32,
+    }));
+    const burstPetals = [];
+
+    function triggerBurst() {
+      for (let i = 0; i < 36; i++) {
+        const ang = Math.random() * Math.PI * 2, spd = 2 + Math.random() * 5.5;
+        burstPetals.push({
+          x: W * 0.5, y: H * 0.45, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd - 2.2,
+          rot: Math.random() * 6, vRot: (Math.random() - 0.5) * 0.15,
+          size: 7 + Math.random() * 8, life: 1, isGold: i % 3 === 0,
+        });
+      }
+    }
+
+    const hudPause = document.getElementById("hudPauseBtn");
+    hudPause?.addEventListener("click", () => {
+      paused = !paused;
+      hudPause.textContent = paused ? "▶ پخش ۳بعدی" : "⏸ توقف ۳بعدی";
+    });
+    document.getElementById("hudBurstBtn")?.addEventListener("click", () => {
+      triggerBurst();
+      showToast("بارش شکوفه‌های ساکورا فعال شد ✦");
+    });
+
+    let mx = 0, my = 0, rx = 0, ry = 0, t = 0;
+    window.addEventListener("pointermove", (e) => { mx = (e.clientX / W - 0.5) * 2; my = (e.clientY / H - 0.5) * 2; }, { passive: true });
+
+    function rotate3D(p, ax, ay, az) {
+      let x = p.x, y = p.y, z = p.z || 0;
+      const cxz = Math.cos(az), sxz = Math.sin(az);
+      const xz = x * cxz - y * sxz, yz = x * sxz + y * cxz; x = xz; y = yz;
+      const cy = Math.cos(ay), sy = Math.sin(ay);
+      const xy = x * cy + z * sy, zy = -x * sy + z * cy; x = xy; z = zy;
+      const cx = Math.cos(ax), sx = Math.sin(ax);
+      return { x, y: y * cx - z * sx, z: y * sx + z * cx };
+    }
+    function project(p, ox, oy, fov) {
+      const depth = fov / (fov + p.z + 430);
+      return { x: ox + p.x * depth, y: oy + p.y * depth, scale: depth, z: p.z };
+    }
+    function drawRingArc(pts, rotOff, ox, oy, fov, color, w, frontOnly) {
+      const proj = pts.map((pt) => project(rotate3D(pt, rx, ry + rotOff, t * 0.16), ox, oy, fov));
+      ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = w; ctx.lineCap = "round";
+      for (let i = 0; i < proj.length; i++) {
+        const a = proj[i], b = proj[(i + 1) % proj.length], avgZ = (a.z + b.z) * 0.5;
+        if ((frontOnly && avgZ >= 0) || (!frontOnly && avgZ < 0)) {
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+    function drawPetal(px, py, sz, rot, alpha, isGold, isLight) {
+      ctx.save(); ctx.translate(px, py); ctx.rotate(rot); ctx.globalAlpha = alpha;
+      if (isGold) {
+        ctx.fillStyle = isLight ? "#c8963e" : "#f6e0aa";
+        ctx.beginPath(); ctx.arc(0, 0, sz * 0.38, 0, Math.PI * 2); ctx.fill();
+      } else {
+        const g = ctx.createLinearGradient(0, -sz, 0, sz);
+        g.addColorStop(0, "#fff0f7"); g.addColorStop(1, isLight ? "#e65c96" : "#f585b8");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.moveTo(0, sz * 0.85);
+        ctx.bezierCurveTo(sz * 0.8, sz * 0.4, sz * 0.9, -sz * 0.45, sz * 0.24, -sz * 0.85);
+        ctx.lineTo(0, -sz * 0.5); ctx.lineTo(-sz * 0.24, -sz * 0.85);
+        ctx.bezierCurveTo(-sz * 0.9, -sz * 0.45, -sz * 0.8, sz * 0.4, 0, sz * 0.85);
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function render3D() {
+      if (!document.hidden) {
+        if (!paused) t += 0.012;
+        const isLight = currentTheme === "light";
+        ctx.clearRect(0, 0, W, H);
+        const scrollRatio = Math.min(1, window.scrollY / Math.max(1, document.documentElement.scrollHeight - H));
+        ry += (mx * 0.55 + scrollRatio * 2.15 - ry) * 0.045;
+        rx += (-my * 0.38 + scrollRatio * 0.42 - rx) * 0.045;
+        const ox = W > 960 ? W * 0.24 : W * 0.5;
+        const oy = (W > 960 ? H * 0.48 : H * 0.36) + Math.sin(t * 1.1) * 14 - scrollRatio * 90;
+        const fov = 760;
+
+        const aura = ctx.createRadialGradient(ox, oy, 20, ox, oy, 345);
+        aura.addColorStop(0, isLight ? "rgba(255, 136, 188, 0.26)" : "rgba(242, 122, 176, 0.22)");
+        aura.addColorStop(0.5, isLight ? "rgba(218, 174, 92, 0.16)" : "rgba(214, 174, 96, 0.12)");
+        aura.addColorStop(1, "transparent");
+        ctx.fillStyle = aura; ctx.beginPath(); ctx.arc(ox, oy, 345, 0, Math.PI * 2); ctx.fill();
+
+        drawRingArc(ringB, -t * 0.22, ox, oy, fov, isLight ? "rgba(186,134,48,0.34)" : "rgba(246,224,170,0.3)", 1.5, false);
+        drawRingArc(ringA, t * 0.3, ox, oy, fov, isLight ? "rgba(222,74,140,0.34)" : "rgba(242,122,176,0.38)", 2.2, false);
+
+        const sliceCount = 8;
+        for (let s = 0; s < sliceCount; s++) {
+          const zOff = (s - (sliceCount - 1) / 2) * 4.8, isFront = s === sliceCount - 1;
+          ctx.beginPath();
+          crescentPts.forEach((pt, idx) => {
+            const pr = project(rotate3D({ x: pt.x, y: pt.y, z: zOff }, rx, ry + Math.sin(t * 0.7) * 0.24, -0.22), ox, oy, fov);
+            if (idx === 0) ctx.moveTo(pr.x, pr.y); else ctx.lineTo(pr.x, pr.y);
+          });
+          ctx.closePath();
+          if (isFront) {
+            const grad = ctx.createLinearGradient(ox - 165, oy - 165, ox + 155, oy + 155);
+            grad.addColorStop(0, "#fff2c6"); grad.addColorStop(0.38, "#ddb25c"); grad.addColorStop(0.75, "#9c7026"); grad.addColorStop(1, "#f2cf82");
+            ctx.fillStyle = grad; ctx.fill();
+            ctx.strokeStyle = "rgba(255,248,224,0.78)"; ctx.lineWidth = 1.5; ctx.stroke();
+          } else {
+            ctx.fillStyle = "rgba(138,96,32," + (0.26 + s * 0.08).toFixed(2) + ")"; ctx.fill();
+          }
+        }
+
+        drawRingArc(ringB, -t * 0.22, ox, oy, fov, isLight ? "rgba(186,134,48,0.45)" : "rgba(246,224,170,0.42)", 1.7, true);
+        drawRingArc(ringA, t * 0.3, ox, oy, fov, isLight ? "rgba(222,74,140,0.46)" : "rgba(242,122,176,0.52)", 2.5, true);
+
+        const starC = project(rotate3D({ x: 84, y: -78, z: 28 }, rx, ry + Math.sin(t * 0.7) * 0.24, -0.22), ox, oy, fov);
+        const sp = (24 + Math.sin(t * 3.2) * 4.5) * starC.scale;
+        ctx.save(); ctx.translate(starC.x, starC.y); ctx.rotate(t * 0.65);
+        const sg = ctx.createRadialGradient(0, 0, 1, 0, 0, sp);
+        sg.addColorStop(0, "#fff"); sg.addColorStop(0.45, "#f6e0aa"); sg.addColorStop(1, "rgba(242,122,176,0)");
+        ctx.fillStyle = sg; ctx.beginPath();
+        for (let i = 0; i < 8; i++) {
+          const rad = i % 2 === 0 ? sp : sp * 0.26, a = (i * Math.PI) / 4;
+          if (i === 0) ctx.moveTo(Math.cos(a) * rad, Math.sin(a) * rad); else ctx.lineTo(Math.cos(a) * rad, Math.sin(a) * rad);
+        }
+        ctx.closePath(); ctx.fill(); ctx.restore();
+
+        pearls.forEach((p) => {
+          if (!paused) p.ang += 0.006 * p.speed;
+          const pr = project(rotate3D({ x: Math.cos(p.ang) * p.rad, y: Math.sin(p.ang) * p.rad * 0.72, z: Math.sin(p.ang * 2) * p.zAmp }, rx, ry, 0), ox, oy, fov);
+          const r = Math.max(2, p.size * pr.scale);
+          const pg = ctx.createRadialGradient(pr.x - r * 0.3, pr.y - r * 0.3, r * 0.1, pr.x, pr.y, r);
+          if (p.rose) { pg.addColorStop(0, "#fff0f7"); pg.addColorStop(0.5, "#f27ab0"); pg.addColorStop(1, "rgba(180,44,106,0.25)"); }
+          else { pg.addColorStop(0, "#fff8e0"); pg.addColorStop(0.5, "#d9b060"); pg.addColorStop(1, "rgba(130,88,24,0.25)"); }
+          ctx.fillStyle = pg; ctx.beginPath(); ctx.arc(pr.x, pr.y, r, 0, Math.PI * 2); ctx.fill();
+        });
+
+        petals3D.forEach((pt) => {
+          if (!paused) {
+            pt.y += pt.vy; pt.x += pt.vx + Math.sin(t + pt.rot) * 0.28; pt.rot += pt.vRot;
+            if (pt.y > 540) { pt.y = -520; pt.x = (Math.random() - 0.5) * 1450; }
+            if (pt.x < -780) pt.x = 780;
+          }
+          const pr = project({ x: pt.x + mx * 45, y: pt.y + my * 35, z: pt.z }, W * 0.5, H * 0.5, 680);
+          if (pr.scale <= 0.1) return;
+          drawPetal(pr.x, pr.y, pt.size * pr.scale, pt.rot, Math.min(0.84, pr.scale * (isLight ? 0.58 : 0.72)), pt.isGold, isLight);
+        });
+
+        for (let i = burstPetals.length - 1; i >= 0; i--) {
+          const b = burstPetals[i];
+          b.x += b.vx; b.y += b.vy; b.vy += 0.04; b.rot += b.vRot; b.life -= 0.012;
+          if (b.life <= 0) { burstPetals.splice(i, 1); continue; }
+          drawPetal(b.x, b.y, b.size, b.rot, b.life, b.isGold, isLight);
+        }
+      }
+      if (!reduced) requestAnimationFrame(render3D);
+    }
+    render3D();
+  })();
+  </script>
+</body>
+</html>`;
+}
+
+function renderAdminHtml() {
+  return `<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>پنل پذیرش و مدیریت نوبت‌ها | کلینیک زیبایی مه تو</title>
+  <style>
+    @font-face {
+      font-family: "Vazirmatn";
+      src: url("/assets/fonts/vazirmatn-var.woff2") format("woff2");
+      font-weight: 100 900;
+      font-display: swap;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Vazirmatn", Tahoma, sans-serif;
+      background: linear-gradient(160deg, #0d060b, #1d0c18);
+      color: #fff7fb;
+      min-height: 100vh;
+      padding: 24px 16px;
+    }
+    .wrap { max-width: 980px; margin: 0 auto; }
+    .card {
+      background: rgba(38, 16, 31, 0.84);
+      border: 1px solid rgba(227, 194, 126, 0.4);
+      border-radius: 22px;
+      padding: 24px;
+      margin-bottom: 18px;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 6px; color: #f6e0aa; }
+    .muted { font-size: 0.85rem; color: #c7a7b8; }
+    input, select, button {
+      font-family: inherit; padding: 10px 14px; border-radius: 12px;
+      border: 1px solid rgba(227, 194, 126, 0.4); background: rgba(12, 5, 10, 0.7);
+      color: #fff; font-size: 0.9rem;
+    }
+    button { background: linear-gradient(135deg, #f6e0aa, #c09a52); color: #1c1016; font-weight: 800; cursor: pointer; }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 14px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 0.86rem; }
+    th, td { padding: 11px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); text-align: right; }
+    th { color: #f6e0aa; }
+    .badge { padding: 3px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
+    .pending { background: rgba(250, 204, 21, 0.2); color: #fde047; }
+    .confirmed { background: rgba(34, 197, 94, 0.2); color: #86efac; }
+    .done { background: rgba(56, 189, 248, 0.2); color: #7dd3fc; }
+    .cancelled { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+    a { color: #f6e0aa; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+      <div>
+        <h1>پنل پذیرش کلینیک زیبایی مه تو</h1>
+        <p class="muted">مدیریت درخواست‌های نوبت و مشاوره آنلاین — دکتر توحید اسماعیلی</p>
+      </div>
+      <a href="/">← بازگشت به سایت کلینیک</a>
+    </div>
+
+    <div class="card" id="authBox">
+      <h2 id="authTitle" style="font-size:1.1rem; margin-bottom:8px;">در حال بررسی وضعیت پنل...</h2>
+      <p id="authHint" class="muted"></p>
+      <form id="authForm" class="row">
+        <input id="passInput" type="password" placeholder="رمز عبور مدیریت (حداقل ۸ کاراکتر)" required style="min-width:260px;" />
+        <button type="submit" id="authSubmit">ورود</button>
+      </form>
+      <p id="authErr" style="color:#fca5a5; font-size:0.84rem; margin-top:10px;"></p>
+    </div>
+
+    <div class="card" id="dashBox" style="display:none; overflow-x:auto;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <strong id="countLabel">لیست نوبت‌ها</strong>
+        <button type="button" id="refreshBtn">بروزرسانی</button>
+      </div>
+      <table>
+        <thead>
+          <tr><th>کد</th><th>مراجع</th><th>تماس</th><th>خدمت</th><th>زمان</th><th>توضیحات</th><th>وضعیت</th><th>عملیات</th></tr>
+        </thead>
+        <tbody id="rowsBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    let token = sessionStorage.getItem("mahto_admin_token") || "";
+    let needsSetup = false;
+
+    async function checkStatus() {
+      const res = await fetch("/api/admin/status", { headers: token ? { Authorization: "Bearer " + token } : {} });
+      const data = await res.json();
+      needsSetup = !data.configured;
+      if (data.authenticated) {
+        document.getElementById("authBox").style.display = "none";
+        document.getElementById("dashBox").style.display = "block";
+        loadList();
+      } else {
+        document.getElementById("authTitle").textContent = needsSetup ? "تنظیم رمز اولیه پنل پذیرش" : "ورود به پنل پذیرش";
+        document.getElementById("authHint").textContent = needsSetup ? "برای اولین بار یک رمز امن برای پنل کلینیک تعریف کنید." : "رمز عبور پنل پذیرش کلینیک را وارد کنید.";
+        document.getElementById("authSubmit").textContent = needsSetup ? "ذخیره رمز و ورود" : "ورود";
+      }
+    }
+
+    document.getElementById("authForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      document.getElementById("authErr").textContent = "";
+      const password = document.getElementById("passInput").value.trim();
+      const endpoint = needsSetup ? "/api/admin/setup" : "/api/admin/login";
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const data = await res.json();
+      if (!res.ok) { document.getElementById("authErr").textContent = data.error || "خطا"; return; }
+      token = data.token;
+      sessionStorage.setItem("mahto_admin_token", token);
+      document.getElementById("authBox").style.display = "none";
+      document.getElementById("dashBox").style.display = "block";
+      loadList();
+    });
+
+    async function loadList() {
+      const res = await fetch("/api/admin/appointments", { headers: { Authorization: "Bearer " + token } });
+      if (!res.ok) { sessionStorage.removeItem("mahto_admin_token"); location.reload(); return; }
+      const data = await res.json();
+      const list = data.appointments || [];
+      document.getElementById("countLabel").textContent = "تعداد کل درخواست‌ها: " + list.length;
+      const body = document.getElementById("rowsBody");
+      body.innerHTML = list.length ? "" : '<tr><td colspan="8" style="text-align:center;color:#c7a7b8;">هنوز درخواستی ثبت نشده است.</td></tr>';
+      for (const a of list) {
+        const tr = document.createElement("tr");
+        tr.innerHTML =
+          '<td dir="ltr">' + a.code + '</td>' +
+          '<td>' + a.full_name + '</td>' +
+          '<td dir="ltr"><a href="tel:' + a.phone + '">' + a.phone + '</a></td>' +
+          '<td>' + a.service + '</td>' +
+          '<td>' + (a.preferred_time || "-") + '</td>' +
+          '<td>' + (a.notes || "-") + '</td>' +
+          '<td><span class="badge ' + a.status + '">' + a.status + '</span></td>' +
+          '<td><select data-id="' + a.id + '" class="st-sel">' +
+            '<option value="pending"' + (a.status==="pending"?" selected":"") + '>در انتظار</option>' +
+            '<option value="confirmed"' + (a.status==="confirmed"?" selected":"") + '>تایید شده</option>' +
+            '<option value="done"' + (a.status==="done"?" selected":"") + '>انجام شده</option>' +
+            '<option value="cancelled"' + (a.status==="cancelled"?" selected":"") + '>لغو شده</option>' +
+          '</select></td>';
+        body.appendChild(tr);
+      }
+      document.querySelectorAll(".st-sel").forEach((s) => {
+        s.addEventListener("change", async () => {
+          await fetch("/api/admin/appointments/" + encodeURIComponent(s.dataset.id), {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+            body: JSON.stringify({ status: s.value }),
+          });
+          loadList();
+        });
+      });
+    }
+
+    document.getElementById("refreshBtn").addEventListener("click", loadList);
+    checkStatus();
+  </script>
+</body>
+</html>`;
+}
+
+async function handleApi(request, env, url) {
+  const path = url.pathname;
+  const method = request.method;
+
+  if (path === "/api/_sync_v2") {
+    return handleSyncV2(request, env, url);
+  }
+
+  if (path === "/api/health" && method === "GET") {
+    return Response.json({ ok: true, version: "2.0-pro", clinic: "MAHTO CLINIC", doctor: "Dr. Tohid Esmaeili", time: new Date().toISOString() });
+  }
+
+  if (path === "/api/appointments" && method === "POST") {
+    await ensureSchema(env);
+    const body = await request.json().catch(() => ({}));
+    const fullName = sanitize(body.fullName, 100);
+    const phone = normalizePhone(body.phone);
+    const service = sanitize(body.service, 120);
+    const preferredTime = sanitize(body.preferredTime, 60);
+    const notes = sanitize(body.notes, 800);
+
+    if (fullName.length < 2) return Response.json({ error: "لطفاً نام و نام خانوادگی معتبر وارد کنید." }, { status: 400 });
+    if (phone.length < 8) return Response.json({ error: "شماره تماس معتبر وارد کنید." }, { status: 400 });
+    if (!service) return Response.json({ error: "خدمت مورد نظر را انتخاب کنید." }, { status: 400 });
+
+    const id = "apt-" + randomHex(6);
+    const code = "MH-" + (100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000));
+    const now = new Date().toISOString();
+
+    await env.SITE_DB.prepare(
+      "INSERT INTO mahto_appointments (id, code, full_name, phone, service, preferred_time, notes, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)"
+    )
+      .bind(id, code, fullName, phone, service, preferredTime, notes, now)
+      .run();
+
+    return Response.json({ ok: true, appointment: { id, code, fullName, phone, service, preferredTime, status: "pending", createdAt: now } }, { status: 201 });
+  }
+
+  if (path === "/api/admin/status" && method === "GET") {
+    await ensureSchema(env);
+    const admin = await env.SITE_DB.prepare("SELECT id FROM mahto_admin WHERE id = 1").first();
+    const authenticated = admin ? await verifyAdminToken(env, request) : false;
+    return Response.json({ configured: Boolean(admin), authenticated });
+  }
+
+  if (path === "/api/admin/setup" && method === "POST") {
+    await ensureSchema(env);
+    const existing = await env.SITE_DB.prepare("SELECT id FROM mahto_admin WHERE id = 1").first();
+    if (existing) return Response.json({ error: "رمز مدیریت قبلاً تنظیم شده است." }, { status: 409 });
+    const body = await request.json().catch(() => ({}));
+    const pass = sanitize(body.password, 128);
+    if (pass.length < 8) return Response.json({ error: "رمز عبور باید حداقل ۸ کاراکتر باشد." }, { status: 400 });
+    const { salt, hash } = await hashPassword(pass);
+    const tokenSecret = randomHex(24);
+    await env.SITE_DB.prepare("INSERT INTO mahto_admin (id, salt, hash, token_secret, created_at) VALUES (1, ?, ?, ?, ?)")
+      .bind(salt, hash, tokenSecret, new Date().toISOString())
+      .run();
+    const token = await signAdminToken(tokenSecret);
+    return Response.json({ ok: true, token }, { status: 201 });
+  }
+
+  if (path === "/api/admin/login" && method === "POST") {
+    await ensureSchema(env);
+    const admin = await env.SITE_DB.prepare("SELECT salt, hash, token_secret FROM mahto_admin WHERE id = 1").first();
+    if (!admin) return Response.json({ error: "ابتدا رمز اولیه را تنظیم کنید." }, { status: 409 });
+    const body = await request.json().catch(() => ({}));
+    const pass = sanitize(body.password, 128);
+    const derived = await hashPassword(pass, admin.salt);
+    if (!constantTimeEq(derived.hash, admin.hash)) {
+      return Response.json({ error: "رمز عبور نادرست است." }, { status: 401 });
+    }
+    const token = await signAdminToken(admin.token_secret);
+    return Response.json({ ok: true, token });
+  }
+
+  if (path === "/api/admin/appointments" && method === "GET") {
+    if (!(await verifyAdminToken(env, request))) return Response.json({ error: "Unauthorized" }, { status: 401 });
+    const rows = await env.SITE_DB.prepare("SELECT * FROM mahto_appointments ORDER BY created_at DESC LIMIT 200").all();
+    return Response.json({ appointments: rows.results || [] });
+  }
+
+  const aptMatch = path.match(/^\/api\/admin\/appointments\/([^/]+)$/);
+  if (aptMatch && method === "PATCH") {
+    if (!(await verifyAdminToken(env, request))) return Response.json({ error: "Unauthorized" }, { status: 401 });
+    const id = decodeURIComponent(aptMatch[1]);
+    const body = await request.json().catch(() => ({}));
+    const status = ["pending", "confirmed", "done", "cancelled"].includes(body.status) ? body.status : "pending";
+    await env.SITE_DB.prepare("UPDATE mahto_appointments SET status = ? WHERE id = ?").bind(status, id).run();
+    return Response.json({ ok: true });
+  }
+
+  return Response.json({ error: "مسیر API یافت نشد." }, { status: 404 });
+}
+
+export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+
+    if (url.pathname.startsWith("/api/")) {
+      return handleApi(request, env, url);
+    }
+
+    if (
+      (request.method === "GET" || request.method === "HEAD") &&
+      (url.pathname.startsWith("/assets/mahto/") || url.pathname.startsWith("/assets/fonts/"))
+    ) {
+      const asset = await serveKvAsset(request, env, url.pathname);
+      if (asset) return asset;
+      return new Response("Asset Not Found", { status: 404 });
+    }
+
+    if (request.method === "GET" || request.method === "HEAD") {
+      if (url.pathname === "/admin" || url.pathname === "/admin/") {
+        return new Response(renderAdminHtml(), {
+          status: 200,
+          headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" },
+        });
+      }
+      const [links, igFeed, vidMeta] = await Promise.all([
+        getConfigJson(env, "links", {}),
+        getConfigJson(env, "ig_feed", null),
+        env.SITE_KV.list({ prefix: "/assets/mahto/clinic-reel.mp4", limit: 1 }),
+      ]);
+      const hasVideo = Boolean(vidMeta?.keys?.length);
+      return new Response(renderMainHtml(links, igFeed, hasVideo), {
+        status: 200,
+        headers: {
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "no-cache",
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
+    }
+
+    return new Response("Method Not Allowed", { status: 405 });
+  },
+};

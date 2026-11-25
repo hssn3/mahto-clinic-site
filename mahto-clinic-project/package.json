@@ -1,0 +1,14 @@
+{
+  "name": "mahto-clinic-worker",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MAHTO CLINIC V2 Pro — Cloudflare Workers + KV + D1",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^3.80.0"
+  }
+}

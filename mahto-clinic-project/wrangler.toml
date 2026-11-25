@@ -1,0 +1,12 @@
+name = "bagh"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+
+[[kv_namespaces]]
+binding = "SITE_KV"
+id = "bea82e7294264192b8194afc8131c57b"
+
+[[d1_databases]]
+binding = "SITE_DB"
+database_name = "bagh-db"
+database_id = "90539662-61bc-4d10-bcc6-50302593dfb3"
