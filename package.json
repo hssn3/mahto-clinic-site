@@ -1,0 +1,16 @@
+{
+  "name": "mahto-clinic-fullstack",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "description": "کلینیک زیبایی مه تو — Fullstack Website, 3D Showcase, Admin Panel & Dual Backend (Cloudflare D1 + Node.js)",
+  "scripts": {
+    "start": "node backend/server.js",
+    "dev:cf": "wrangler dev",
+    "db:init": "wrangler d1 execute SITE_DB --remote --file=backend/schema.sql",
+    "deploy:cf": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^3.80.0"
+  }
+}
