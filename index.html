@@ -1,0 +1,967 @@
+<!doctype html>
+<html lang="fa" dir="rtl" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>کلینیک زیبایی مه تو | MAHTO CLINIC — دکتر توحید اسماعیلی، بابل</title>
+  <meta name="description" content="کلینیک تخصصی پوست، مو، لیزر سوپرانو تیتانیوم ۲۰۲۵، فیلر نورامیس و رووفیل، بوتاکس و لیفت ابرو، هایفوتراپی، هیر فیلر، کربوکسی‌تراپی، بلیچینگ و پروتکل لاغری اسپارتینا در بابل با مدیریت دکتر توحید اسماعیلی (نظام پزشکی ۲۳۰۲۴۹)." />
+  <meta name="theme-color" content="#0a0509" />
+  <meta property="og:title" content="کلینیک زیبایی مه تو | MAHTO CLINIC" />
+  <meta property="og:description" content="در کلینیک مه‌تو، زیبایی با منطق همراه است — دکتر توحید اسماعیلی، بابل." />
+  <meta property="og:image" content="./assets/mahto/profile.jpg" />
+  <link rel="icon" type="image/jpeg" href="./assets/mahto/profile.jpg" />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <!-- Signature Interactive 3D Sculptural Universe -->
+  <canvas id="universe3D" aria-hidden="true"></canvas>
+  <div class="studio-grid" aria-hidden="true"></div>
+
+  <div class="site-layer">
+    <!-- Sticky Floating Glass Navigation -->
+    <div class="navbar-wrap">
+      <nav class="navbar glass" aria-label="منوی اصلی کلینیک زیبایی مه تو">
+        <a href="#top" class="brand-link">
+          <span class="brand-orb">
+            <svg width="34" height="34" viewBox="0 0 120 120" aria-hidden="true">
+              <defs>
+                <linearGradient id="navGold" x1="14%" y1="6%" x2="88%" y2="90%">
+                  <stop offset="0%" stop-color="#F6E0AA" />
+                  <stop offset="48%" stop-color="#D4A853" />
+                  <stop offset="100%" stop-color="#9A7430" />
+                </linearGradient>
+              </defs>
+              <path d="M 65.5 13 C 40.5 13.5, 22 31.5, 22.8 53.5 C 23.5 72.5, 38.5 85.5, 58.2 85.5 C 69.2 85.5, 78.8 81.2, 84.8 74.2 C 76.4 79.0, 65.6 79.8, 56.6 76.2 C 50.8 73.8, 48.2 70.0, 49.0 66.2 C 49.6 63.4, 52.8 62.6, 55.2 61.8 C 57.0 61.2, 57.6 59.8, 56.4 58.8 C 57.8 58.2, 58.2 57.1, 56.6 56.4 C 58.2 55.5, 58.4 54.3, 56.8 53.6 C 56.2 53.3, 56.2 52.4, 57.2 51.9 L 60.4 50.4 C 61.2 50.0, 61.1 49.0, 60.2 48.4 C 57.8 46.8, 56.2 44.6, 56.0 42.2 C 55.8 39.6, 56.8 36.8, 56.4 33.4 C 55.9 28.4, 58.4 21.8, 65.5 13 Z" fill="url(#navGold)"/>
+              <path d="M 78.2 24.5 L 79.6 28.4 L 83.5 29.8 L 79.6 31.2 L 78.2 35.1 L 76.8 31.2 L 72.9 29.8 L 76.8 28.4 Z" fill="url(#navGold)"/>
+            </svg>
+          </span>
+          <span class="brand-text">
+            <strong>کلینیک زیبایی مه تو</strong>
+            <span>MAHTO CLINIC · BABOL</span>
+          </span>
+        </a>
+
+        <ul class="nav-links" id="navLinks">
+          <li><a href="#top">صفحه اصلی</a></li>
+          <li><a href="#offers">آفرها و کمپین</a></li>
+          <li><a href="#reels">سینما ریلز</a></li>
+          <li><a href="#services">خدمات تخصصی</a></li>
+          <li><a href="#gallery">گالری سه‌بعدی</a></li>
+          <li><a href="#soprano">سوپرانو ۲۰۲۵</a></li>
+          <li><a href="#knowledge">دانستنی‌ها</a></li>
+          <li><a href="#booking">رزرو و تماس</a></li>
+        </ul>
+
+        <div class="nav-actions">
+          <button type="button" class="icon-btn" id="themeToggle" title="تغییر تم شب و استودیو ساکورا" aria-label="تغییر تم رنگی">☀</button>
+          <a href="#booking" class="btn-gold nav-cta">رزرو نوبت</a>
+          <button type="button" class="icon-btn mobile-menu-btn" id="mobileMenuBtn" aria-label="باز کردن منو" aria-expanded="false">☰</button>
+        </div>
+      </nav>
+
+      <!-- Mobile Glass Dropdown Menu -->
+      <div class="mobile-nav-drawer glass" id="mobileNavDrawer" aria-hidden="true">
+        <a href="#top">صفحه اصلی</a>
+        <a href="#offers">آفرها و کمپین ۳۰۰ میلیونی</a>
+        <a href="#reels">سینما ریلز و استوری‌ها</a>
+        <a href="#services">خدمات تخصصی (۹ شاخه)</a>
+        <a href="#gallery">گالری سه‌بعدی نمونه‌کارها</a>
+        <a href="#soprano">لیزر سوپرانو تیتانیوم ۲۰۲۵</a>
+        <a href="#knowledge">دانستنی‌های علمی</a>
+        <a href="#doctor">دکتر توحید اسماعیلی</a>
+        <a href="#booking">رزرو نوبت و مشاوره رایگان</a>
+      </div>
+    </div>
+
+    <!-- TOP 4-SLIDE CINEMATIC EDITORIAL HERO SLIDER -->
+    <header id="top" class="hero-slider-section">
+      <div class="container">
+        <div class="hero-slider-frame" id="heroSliderFrame" aria-roledescription="carousel" aria-label="اسلایدر چهارتایی کلینیک زیبایی مه تو">
+          <span class="hero-slider-top-rim" aria-hidden="true"></span>
+
+          <button type="button" class="slider-arrow prev" id="heroPrev" aria-label="اسلاید قبلی">→</button>
+          <button type="button" class="slider-arrow next" id="heroNext" aria-label="اسلاید بعدی">←</button>
+
+          <div class="hero-slides-track" id="heroSlidesTrack">
+            <!-- SLIDE 1: Brand Identity & Doctor -->
+            <div class="hero-slide active" data-slide="0">
+              <div class="slide-bg-tint" style="background-image:url('./assets/mahto/welcome.jpg');"></div>
+              <div class="slide-copy">
+                <div class="slide-kicker">
+                  <span class="pulse-dot"></span>
+                  <span>۰۱ · کلینیک زیبایی مه‌تو — بابل</span>
+                </div>
+                <h1 class="slide-title">
+                  جایی که <span class="gold-gradient-text">زیبایی با منطق</span><br />
+                  و کیفیت با قیمت درست همراه است
+                </h1>
+                <p class="slide-lead">
+                  در <strong>کلینیک تخصصی مه تو (MAHTO CLINIC)</strong> تحت نظر مستقیم
+                  <strong>دکتر توحید اسماعیلی</strong> (نظام پزشکی ۲۳۰۲۴۹)، تجهیزات پیشرفته، اپراتورهای متخصص
+                  و برندهای اصیل در کنار هم قرار گرفته‌اند تا نتیجه‌ای طبیعی، ایمن و ماندگار تجربه کنید.
+                </p>
+                <div class="slide-highlights">
+                  <span class="slide-chip">نظام پزشکی ۲۳۰۲۴۹</span>
+                  <span class="slide-chip">تضمین اصالت مواد</span>
+                  <span class="slide-chip">مشاوره تخصصی رایگان</span>
+                </div>
+                <div class="slide-actions">
+                  <a href="#booking" class="btn-gold">رزرو نوبت و مشاوره رایگان</a>
+                  <button type="button" class="btn-glass" data-play-reel="clinic-intro">▶ پخش ریلز معرفی کلینیک</button>
+                </div>
+              </div>
+              <div class="slide-visual">
+                <div class="visual-frame">
+                  <img src="./assets/mahto/profile.jpg" alt="دکتر توحید اسماعیلی — کلینیک زیبایی مه تو" style="object-position:center 18%;" />
+                  <button type="button" class="slide-medallion-badge" data-play-reel="clinic-intro" title="پخش ویدیوی معرفی مه تو" aria-label="پخش ویدیوی معرفی مه تو">
+                    <span class="slide-medallion-inner">
+                      <svg width="56" height="56" viewBox="0 0 120 120" aria-hidden="true">
+                        <path d="M 65.5 13 C 40.5 13.5, 22 31.5, 22.8 53.5 C 23.5 72.5, 38.5 85.5, 58.2 85.5 C 69.2 85.5, 78.8 81.2, 84.8 74.2 C 76.4 79.0, 65.6 79.8, 56.6 76.2 C 50.8 73.8, 48.2 70.0, 49.0 66.2 C 49.6 63.4, 52.8 62.6, 55.2 61.8 C 57.0 61.2, 57.6 59.8, 56.4 58.8 C 57.8 58.2, 58.2 57.1, 56.6 56.4 C 58.2 55.5, 58.4 54.3, 56.8 53.6 C 56.2 53.3, 56.2 52.4, 57.2 51.9 L 60.4 50.4 C 61.2 50.0, 61.1 49.0, 60.2 48.4 C 57.8 46.8, 56.2 44.6, 56.0 42.2 C 55.8 39.6, 56.8 36.8, 56.4 33.4 C 55.9 28.4, 58.4 21.8, 65.5 13 Z" fill="url(#navGold)"/>
+                        <text x="60" y="102" text-anchor="middle" fill="#241E19" font-family="Georgia,serif" font-size="13" font-weight="700" letter-spacing="2">MAHTO</text>
+                      </svg>
+                    </span>
+                  </button>
+                  <div class="visual-floating-badge">
+                    <div>
+                      <strong>دکتر توحید اسماعیلی</strong>
+                      <span>بابل، میدان شهید سجودی (قاضی کتی)، ساختمان مازیار</span>
+                    </div>
+                    <a href="tel:+989201827726" dir="ltr" class="badge-phone">۰۹۲۰ ۱۸۲ ۷۷۲۶</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SLIDE 2: Soprano Titanium 2025 + 790K Offer -->
+            <div class="hero-slide" data-slide="1">
+              <div class="slide-bg-tint" style="background-image:url('./assets/mahto/soprano-tech.jpg');"></div>
+              <div class="slide-copy">
+                <div class="slide-kicker">
+                  <span class="pulse-dot"></span>
+                  <span>۰۲ · لیزر نسل ۲۰۲۵ — آفر فول‌بادی ۷۹۰ هزار تومان</span>
+                </div>
+                <h2 class="slide-title">
+                  لیزر بدون درد با دستگاه<br />
+                  <span class="gold-gradient-text">Soprano Titanium 2025</span>
+                </h2>
+                <p class="slide-lead">
+                  سه طول موج همزمان، خنک‌کننده قدرتمند و سرعت بالا برای انواع تیپ‌های پوستی (حتی پوست سبزه).
+                  با تنظیم اختصاصی هر فرد بر اساس فاز رشد فعال مو (آناژن)؛ هم‌اکنون در بابل با آفر ویژه
+                  <strong>فول‌بادی فقط ۷۹۰ هزار تومان</strong>.
+                </p>
+                <div class="slide-highlights">
+                  <span class="slide-chip">۳ طول موج همزمان</span>
+                  <span class="slide-chip">فول‌بادی ۷۹۰ هزار تومان</span>
+                  <span class="slide-chip">بدون درد و موهای زیرپوستی</span>
+                </div>
+                <div class="slide-actions">
+                  <button type="button" class="btn-gold" data-select-service="لیزر موهای زائد (Soprano Titanium 2025)">رزرو لیزر ۷۹۰ هزار تومانی</button>
+                  <button type="button" class="btn-glass" data-play-reel="soprano-2025">▶ تماشای ریلز سوپرانو ۲۰۲۵</button>
+                </div>
+              </div>
+              <div class="slide-visual">
+                <div class="collage-duo">
+                  <div class="collage-main">
+                    <img src="./assets/mahto/laser-before-after.jpg" alt="نتیجه واقعی صافی پوست بعد از جلسات لیزر مه تو" />
+                  </div>
+                  <div class="collage-side">
+                    <div class="collage-mini">
+                      <img src="./assets/mahto/soprano-tech.jpg" alt="دستگاه لیزر سوپرانو تیتانیوم ۲۰۲۵" />
+                    </div>
+                    <div class="collage-mini">
+                      <img src="./assets/reels/laser-790.jpg" alt="لیزر فول بادی ۷۹۰ هزار تومانی در بابل" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SLIDE 3: Real Instagram Fillers, Jawline & Botox -->
+            <div class="hero-slide" data-slide="2">
+              <div class="slide-bg-tint" style="background-image:url('./assets/ig/jawline-1.jpg');"></div>
+              <div class="slide-copy">
+                <div class="slide-kicker">
+                  <span class="pulse-dot"></span>
+                  <span>۰۳ · فیلر نورامیس و رووفیل، زاویه‌سازی و بوتاکس</span>
+                </div>
+                <h2 class="slide-title">
+                  تغییر ظریف، <span class="gold-gradient-text">تأثیر چشمگیر</span><br />
+                  بدون اغراق و Overfilling
+                </h2>
+                <p class="slide-lead">
+                  نمونه‌کارهای واقعی کلینیک مه‌تو: تزریق ۱ سی‌سی فیلر لب با برند محبوب <strong>نورامیس</strong>،
+                  فرم‌دهی چانه با ۱.۵ سی‌سی <strong>رووفیل</strong>، زاویه‌سازی فک بدون جراحی، اصلاح فرم لب‌های تزریق‌شده
+                  و ترکیب هوشمندانه <strong>بوتاکس و فیلر</strong> توسط دکتر اسماعیلی.
+                </p>
+                <div class="slide-highlights">
+                  <span class="slide-chip">فیلر لب نورامیس</span>
+                  <span class="slide-chip">فیلر چانه رووفیل</span>
+                  <span class="slide-chip">زاویه‌سازی فک و لیفت ابرو</span>
+                </div>
+                <div class="slide-actions">
+                  <button type="button" class="btn-gold" data-select-service="فیلر لب، چانه و زاویه‌سازی فک">رزرو مشاوره فیلر و زاویه</button>
+                  <button type="button" class="btn-glass" data-play-reel="botox-filler">▶ ریلز ترکیب بوتاکس و فیلر</button>
+                </div>
+              </div>
+              <div class="slide-visual">
+                <div class="collage-duo">
+                  <div class="collage-main">
+                    <img src="./assets/ig/jawline-1.jpg" alt="نمونه‌کار واقعی زاویه‌سازی فک کلینیک مه تو" />
+                  </div>
+                  <div class="collage-side">
+                    <div class="collage-mini">
+                      <img src="./assets/ig/lip-neuramis-1.jpg" alt="فیلر لب یک سی‌سی با برند نورامیس در کلینیک مه تو" />
+                    </div>
+                    <div class="collage-mini">
+                      <img src="./assets/ig/chin-revofil-1.jpg" alt="فیلر چانه یک و نیم سی‌سی رووفیل در کلینیک مه تو" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SLIDE 4: HIFU 50% Off, Spartina & 300M Campaign -->
+            <div class="hero-slide" data-slide="3">
+              <div class="slide-bg-tint" style="background-image:url('./assets/reels/hifu.jpg');"></div>
+              <div class="slide-copy">
+                <div class="slide-kicker">
+                  <span class="pulse-dot"></span>
+                  <span>۰۴ · جشنواره هایفو ۵۰٪، لاغری اسپارتینا و هدیه ۳۰۰ میلیونی</span>
+                </div>
+                <h2 class="slide-title">
+                  لیفت غیرجراحی <span class="gold-gradient-text">هایفو ۳.۵ میلیون</span><br />
+                  و مسیر علمی لاغری اسپارتینا
+                </h2>
+                <p class="slide-lead">
+                  به‌جای هزینه ۳۰۰ میلیونی بیلبورد شهری، بودجه تبلیغات را به هدایا و تخفیف‌های واقعی برای شما تبدیل کردیم:
+                  <strong>هایفوتراپی با ۵۰٪ تخفیف</strong> (۳.۵ میلیون به‌جای ۷ میلیون)، <strong>کربوکسی‌تراپی ۹۸۰ هزار تومان</strong>،
+                  و مشاوره علمی کاهش وزن <strong>اسپارتینا</strong> زیر نظر پزشک.
+                </p>
+                <div class="slide-highlights">
+                  <span class="slide-chip">هایفو ۳.۵ میلیون (به‌جای ۷)</span>
+                  <span class="slide-chip">کربوکسی ۹۸۰ هزار تومان</span>
+                  <span class="slide-chip">پروتکل علمی اسپارتینا</span>
+                </div>
+                <div class="slide-actions">
+                  <button type="button" class="btn-gold" data-select-service="هایفوتراپی و لیفت صورت (آفر ۳.۵ میلیون)">ثبت نوبت آفرهای ویژه</button>
+                  <button type="button" class="btn-glass" data-play-reel="billboard-gift">▶ داستان کمپین ۳۰۰ میلیونی</button>
+                </div>
+              </div>
+              <div class="slide-visual">
+                <div class="collage-duo">
+                  <div class="collage-main">
+                    <img src="./assets/reels/hifu.jpg" alt="تخفیف ویژه هایفوتراپی در بابل — کلینیک مه تو" />
+                  </div>
+                  <div class="collage-side">
+                    <div class="collage-mini">
+                      <img src="./assets/reels/spartina.jpg" alt="پروتکل علمی لاغری اسپارتینا زیر نظر پزشک" />
+                    </div>
+                    <div class="collage-mini">
+                      <img src="./assets/reels/carboxy.jpg" alt="کربوکسی‌تراپی روشن‌سازی پوست تا ۴ درجه" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Interactive 4-Slide Bottom Selector Dock -->
+          <div class="hero-slider-dock" role="tablist" aria-label="انتخاب اسلاید">
+            <button type="button" class="slide-tab active" data-goto="0" role="tab" aria-selected="true">
+              <span class="slide-progress"></span>
+              <span class="slide-tab-num">۰۱</span>
+              <span class="slide-tab-meta">
+                <span class="slide-tab-title">کلینیک مه‌تو · دکتر اسماعیلی</span>
+                <span class="slide-tab-sub">زیبایی منطقی و مشاوره رایگان</span>
+              </span>
+            </button>
+            <button type="button" class="slide-tab" data-goto="1" role="tab" aria-selected="false">
+              <span class="slide-progress"></span>
+              <span class="slide-tab-num">۰۲</span>
+              <span class="slide-tab-meta">
+                <span class="slide-tab-title">سوپرانو ۲۰۲۵ · ۷۹۰ هزار</span>
+                <span class="slide-tab-sub">سه طول موج و بدون درد</span>
+              </span>
+            </button>
+            <button type="button" class="slide-tab" data-goto="2" role="tab" aria-selected="false">
+              <span class="slide-progress"></span>
+              <span class="slide-tab-num">۰۳</span>
+              <span class="slide-tab-meta">
+                <span class="slide-tab-title">نورامیس، رووفیل و بوتاکس</span>
+                <span class="slide-tab-sub">نمونه‌کارهای واقعی فک و لب</span>
+              </span>
+            </button>
+            <button type="button" class="slide-tab" data-goto="3" role="tab" aria-selected="false">
+              <span class="slide-progress"></span>
+              <span class="slide-tab-num">۰۴</span>
+              <span class="slide-tab-meta">
+                <span class="slide-tab-title">هایفو، اسپارتینا و کمپین ۳۰۰م</span>
+                <span class="slide-tab-sub">آفرهای شفاف و لیفت غیرجراحی</span>
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 4 Luxury Trust Metrics Strip -->
+        <div class="trust-strip">
+          <div class="trust-card glass">
+            <span class="trust-icon">🩺</span>
+            <div><strong>نظام پزشکی ۲۳۰۲۴۹</strong><span>انجام تزریقات زیر نظر پزشک</span></div>
+          </div>
+          <div class="trust-card glass">
+            <span class="trust-icon">⚡</span>
+            <div><strong>Soprano Titanium 2025</strong><span>۳ طول موج · فول‌بادی ۷۹۰ هزار</span></div>
+          </div>
+          <div class="trust-card glass">
+            <span class="trust-icon">🎁</span>
+            <div><strong>کمپین ۳۰۰ میلیونی</strong><span>بودجه تبلیغات تبدیل به تخفیف شما</span></div>
+          </div>
+          <div class="trust-card glass">
+            <span class="trust-icon">✨</span>
+            <div><strong>۹ شاخه تخصصی</strong><span>پوست، مو، لیزر، بلیچینگ و لاغری</span></div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- REAL INSTAGRAM CAMPAIGNS & TRANSPARENT OFFERS BENTO -->
+    <section id="offers" class="section" style="padding-top:44px;">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="eyebrow">جشنواره و آفرهای شفاف · مستقیم از @mahto_clinic</span>
+          <h2 class="section-title">رضایت شما <span class="gold-gradient-text">موندگارترین سرمایه</span> ماست</h2>
+          <p class="section-desc">تمامی قیمت‌ها و آفرهای زیر مستقیماً از پست‌های رسمی کلینیک زیبایی مه تو در بابل استخراج شده‌اند.</p>
+        </div>
+
+        <div class="offers-bento reveal">
+          <!-- Featured 300M Campaign Story Card -->
+          <article class="offer-hero-card glass tilt-3d">
+            <div class="offer-badge-live">✦ کمپین ویژه کلینیک مه‌تو</div>
+            <h3>به‌جای بیلبورد <span class="gold-gradient-text">۳۰۰ میلیونی</span>، هدیه‌اش را به شما دادیم!</h3>
+            <p>
+              «قرار بود برای معرفی کلینیک یک بیلبورد بزرگ در شهر رزرو کنیم؛ هزینه‌اش ۳۰۰ میلیون تومان بود.
+              تصمیم گرفتیم به‌جای تبلیغات موقت، این مبلغ را به شکل تخفیف‌ها، هدایا و آفرهای واقعی به مراجعین عزیز
+              اختصاص دهیم؛ چون بهترین تبلیغ ما، لبخند رضایت شماست.»
+            </p>
+            <div class="offer-hero-actions">
+              <button type="button" class="btn-gold" data-play-reel="billboard-gift">▶ تماشای ویدیوی کمپین</button>
+              <button type="button" class="btn-glass" data-select-service="مشاوره عمومی پوست و مو (کمپین هدیه ۳۰۰ میلیونی)">دریافت هدیه مراجعین جدید</button>
+            </div>
+          </article>
+
+          <!-- Offer 1: Laser 790K -->
+          <article class="offer-mini-card glass tilt-3d">
+            <div class="offer-top-row">
+              <span class="offer-chip">لیزر فول‌بادی بابل</span>
+              <button type="button" class="mini-reel-pill" data-play-reel="laser-790">▶ ریلز</button>
+            </div>
+            <h4>سوپرانو تیتانیوم ۲۰۲۵</h4>
+            <div class="offer-price-box">
+              <strong class="offer-price">۷۹۰ <small>هزار تومان</small></strong>
+              <span class="offer-sub">سه طول موج · خنک‌کننده قوی</span>
+            </div>
+            <button type="button" class="service-btn" data-select-service="لیزر موهای زائد (Soprano Titanium 2025)">رزرو آفر ۷۹۰ هزار تومانی ←</button>
+          </article>
+
+          <!-- Offer 2: HIFU 50% OFF -->
+          <article class="offer-mini-card glass tilt-3d">
+            <div class="offer-top-row">
+              <span class="offer-chip rose">۵۰٪ تخفیف محدود</span>
+              <button type="button" class="mini-reel-pill" data-play-reel="hifu">▶ ریلز</button>
+            </div>
+            <h4>هایفوتراپی و لیفت صورت</h4>
+            <div class="offer-price-box">
+              <span class="offer-old">قیمت اصلی: ۷ میلیون</span>
+              <strong class="offer-price">۳.۵ <small>میلیون تومان</small></strong>
+              <span class="offer-sub">سفت‌سازی و لیفت بدون جراحی</span>
+            </div>
+            <button type="button" class="service-btn" data-select-service="هایفوتراپی و لیفت صورت (آفر ۳.۵ میلیون)">رزرو آفر ۳.۵ میلیونی ←</button>
+          </article>
+
+          <!-- Offer 3: Carboxy 980K -->
+          <article class="offer-mini-card glass tilt-3d">
+            <div class="offer-top-row">
+              <span class="offer-chip">روشن‌سازی تا ۴ درجه</span>
+              <button type="button" class="mini-reel-pill" data-play-reel="carboxy">▶ ریلز</button>
+            </div>
+            <h4>کربوکسی‌تراپی تخصصی</h4>
+            <div class="offer-price-box">
+              <strong class="offer-price">۹۸۰ <small>هزار تومان</small></strong>
+              <span class="offer-sub">رفع تیرگی و جوانسازی پوست</span>
+            </div>
+            <button type="button" class="service-btn" data-select-service="کربوکسی‌تراپی و فیشیال (آفر ۹۸۰ هزار)">رزرو کربوکسی ۹۸۰ تومانی ←</button>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- INTERACTIVE REELS CINEMA & STORIES SHOWCASE -->
+    <section id="reels" class="section">
+      <div class="container">
+        <div class="section-head reveal" style="margin-bottom:28px;">
+          <span class="eyebrow">سینما ریلز و استوری‌های واقعی · @mahto_clinic</span>
+          <h2 class="section-title">نگاهی زنده به نمونه‌کارها، دستگاه‌ها و فضای کلینیک</h2>
+          <p class="section-desc">روی هر استوری یا آیتم لیست ریلز کلیک کنید تا ویدیوی واقعی آن مستقیماً در استیج سه‌بعدی پخش شود.</p>
+        </div>
+
+        <!-- Interactive Instagram-Style Highlights Strip -->
+        <div class="stories-row reveal" id="storiesRow" aria-label="هایلایت‌های کلینیک زیبایی مه تو"></div>
+
+        <!-- Interactive Reels Cinema Theater -->
+        <div class="reel-cinema glass reveal">
+          <div class="reel-stage-col">
+            <div class="reel-phone-frame tilt-3d" id="reelPhoneFrame">
+              <span class="reel-badge" id="reelActiveBadge">🎬 معرفی کلینیک مه تو</span>
+              <video id="activeReelVideo" playsinline loop muted controls poster="./assets/reels/clinic-intro.jpg" preload="metadata">
+                <source src="./assets/reels/clinic-intro.mp4" type="video/mp4" />
+              </video>
+            </div>
+            <div class="reel-controls-bar">
+              <button type="button" class="btn-glass mini-btn" id="reelMuteBtn">🔊 وصل / قطع صدا</button>
+              <button type="button" class="btn-glass mini-btn" id="reelFullscreenBtn">⤢ تمام‌صفحه با کپشن</button>
+            </div>
+          </div>
+
+          <div class="reel-info-col">
+            <div class="reel-active-meta">
+              <span class="latin-kicker">MAHTO INTERACTIVE REELS</span>
+              <h3 id="reelActiveTitle">در کلینیک مه‌تو، زیبایی با منطق همراه است</h3>
+              <p id="reelActiveCaption" class="reel-caption-box"></p>
+              <div class="reel-cta-row">
+                <button type="button" class="btn-gold" id="reelBookServiceBtn">رزرو مشاوره این خدمت</button>
+                <a id="reelIgLink" href="https://www.instagram.com/mahto_clinic" target="_blank" rel="noopener noreferrer" class="btn-glass">مشاهده در اینستاگرام ↗</a>
+              </div>
+            </div>
+
+            <div class="reel-playlist-head">
+              <strong>آرشیو ریلزهای منتخب (@mahto_clinic)</strong>
+              <span id="reelCountLabel">۱۴ ویدیوی واقعی</span>
+            </div>
+            <div class="reel-playlist" id="reelPlaylist" aria-label="لیست پخش ریلزهای کلینیک مه تو"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SERVICES (9 REAL SERVICES WITH CATEGORY FILTER & 3D TILT CARDS) -->
+    <section id="services" class="section">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="eyebrow">۹ شاخه تخصصی کلینیک زیبایی مه تو</span>
+          <h2 class="section-title">طراحی زیبایی طبیعی با متدهای علمی روز دنیا</h2>
+          <p class="section-desc">خدمت مورد نظرتان را فیلتر کنید، ریلز واقعی آن را ببینید و مستقیماً نوبت مشاوره رایگان رزرو کنید.</p>
+        </div>
+
+        <div class="gallery-controls reveal" id="serviceFilters">
+          <button type="button" class="filter-pill active" data-svc-cat="all">همه خدمات (۹)</button>
+          <button type="button" class="filter-pill" data-svc-cat="inject">فیلر و بوتاکس</button>
+          <button type="button" class="filter-pill" data-svc-cat="device">لیزر و هایفو</button>
+          <button type="button" class="filter-pill" data-svc-cat="skin">پوست، مو و جوانساز</button>
+          <button type="button" class="filter-pill" data-svc-cat="body">لاغری و بلیچینگ</button>
+        </div>
+
+        <div class="services-grid" id="servicesGrid">
+          <!-- 1. Fillers & Jawline -->
+          <article class="service-card glass tilt-3d reveal" data-svc-cat="inject">
+            <div class="service-media">
+              <img src="./assets/ig/lip-neuramis-1.jpg" alt="فیلر لب نورامیس، چانه رووفیل و زاویه‌سازی فک در کلینیک مه تو" loading="lazy" />
+              <span class="service-tag">نورامیس · رووفیل · فول‌فیس</span>
+              <button type="button" class="card-reel-fab" data-play-reel="lip-correction" title="مشاهده ریلز اصلاح فرم لب">▶ ریلز</button>
+            </div>
+            <div class="service-body">
+              <h3>فیلر لب، چانه و زاویه‌سازی فک</h3>
+              <p>تزریق اصولی فیلر لب با برند محبوب نورامیس، فرم‌دهی چانه با ۱.۵ سی‌سی رووفیل، زاویه‌سازی فک بدون جراحی، فول‌فیس و اصلاح فرم لب‌های نامتقارن بدون Overfilling.</p>
+              <ul class="service-bullets"><li>برند نورامیس و رووفیل</li><li>زاویه‌سازی فک طبیعی</li><li>اصلاح فرم تکنیکی</li></ul>
+              <button type="button" class="service-btn" data-select-service="فیلر لب، چانه و زاویه‌سازی فک">رزرو مشاوره فیلر ←</button>
+            </div>
+          </article>
+
+          <!-- 2. Soprano Titanium 2025 -->
+          <article class="service-card glass tilt-3d reveal" data-svc-cat="device">
+            <div class="service-media">
+              <img src="./assets/mahto/soprano-tech.jpg" alt="دستگاه لیزر موهای زائد سوپرانو تیتانیوم ۲۰۲۵ کلینیک مه تو" loading="lazy" />
+              <span class="service-tag">فول‌بادی ۷۹۰ هزار تومان</span>
+              <button type="button" class="card-reel-fab" data-play-reel="soprano-2025" title="مشاهده ریلز سوپرانو ۲۰۲۵">▶ ریلز</button>
+            </div>
+            <div class="service-body">
+              <h3>لیزر موهای زائد (Soprano 2025)</h3>
+              <p>سوپرانو تیتانیوم ۲۰۲۵ با سه طول موج همزمان، خنک‌کننده قدرتمند و سرعت بالا؛ مناسب انواع تیپ‌های پوستی (حتی سبزه) با تنظیم اختصاصی بر اساس فاز رشد آناژن.</p>
+              <ul class="service-bullets"><li>۳ طول موج همزمان</li><li>آفر فول‌بادی ۷۹۰ هزار</li><li>بدون درد و سوختگی</li></ul>
+              <button type="button" class="service-btn" data-select-service="لیزر موهای زائد (Soprano Titanium 2025)">رزرو جلسه لیزر ←</button>
+            </div>
+          </article>
+
+          <!-- 3. Botox & Brow Lift -->
+          <article class="service-card glass tilt-3d reveal" data-svc-cat="inject">
+            <div class="service-media">
+              <img src="./assets/reels/brow-lift.jpg" alt="بوتاکس تخصصی و لیفت ابرو توسط دکتر توحید اسماعیلی" loading="lazy" />
+              <span class="service-tag">تزریق توسط دکتر اسماعیلی</span>
+              <button type="button" class="card-reel-fab" data-play-reel="brow-lift" title="مشاهده ریلز تکنیک لیفت ابرو">▶ ریلز</button>
+            </div>
+            <div class="service-body">
+              <h3>بوتاکس تخصصی و لیفت ابرو</h3>
+              <p>تزریق دقیق آناتومیک برای محو خطوط پیشانی، اخم و پنجه‌کلاغی همراه با تکنیک ۳ نقطه‌ای لیفت ابرو (چشم گربه‌ای) بدون ایجاد افتادگی (پتوز) و ترکیب هوشمند با فیلر.</p>
+              <ul class="service-bullets"><li>لیفت ابرو و چشم گربه‌ای</li><li>پیشگیری از پتوز</li><li>حفظ میمیک طبیعی</li></ul>
+              <button type="button" class="service-btn" data-select-service="بوتاکس تخصصی و لیفت ابرو">رزرو نوبت بوتاکس ←</button>
+            </div>
+          </article>
+
+          <!-- 4. HIFU & Non-Surgical Lift -->
+          <article class="service-card glass tilt-3d reveal" data-svc-cat="device">
+            <div class="service-media">
+              <img src="./assets/reels/hifu.jpg" alt="هایفوتراپی و لیفت صورت بدون جراحی در کلینیک مه تو بابل" loading="lazy" />
+              <span class="service-tag">تخفیف ۵۰٪ · ۳.۵ میلیون</span>
+              <button type="button" class="card-reel-fab" data-play-reel="hifu" title="مشاهده ریلز هایفوتراپی">▶ ریلز</button>
+            </div>
+            <div class="service-body">
+              <h3>هایفوتراپی و لیفت بدون جراحی</h3>
+              <p>سفت‌سازی عمقی پوست، تحریک کلاژن‌سازی و لیفت صورت و غبغب بدون نیاز به جراحی و نقاهت؛ با دستگاه به‌روز در بابل (قیمت ویژه ۳.۵ میلیون به‌جای ۷ میلیون تومان).</p>
+              <ul class="service-bullets"><li>بدون جراحی و نقاهت</li><li>سفتی و قوام پوست</li><li>تخفیف ویژه ۳.۵ میلیون</li></ul>
+              <button type="button" class="service-btn" data-select-service="هایفوتراپی و لیفت صورت (آفر ۳.۵ میلیون)">رزرو آفر هایفو ←</button>
+            </div>
+          </article>
+
+          <!-- 5. Spartina Scientific Weight Loss -->
+          <article class="service-card glass tilt-3d reveal" data-svc-cat="body">
+            <div class="service-media">
+              <img src="./assets/reels/spartina.jpg" alt="پروتکل علمی لاغری اسپارتینا زیر نظر پزشک در بابل" loading="lazy" />
+              <span class="service-tag">مسیر علمی کاهش وزن</span>
+              <button type="button" class="card-reel-fab" data-play-reel="spartina" title="مشاهده ریلز اسپارتینا">▶ ریلز</button>
+            </div>
+            <div class="service-body">
+              <h3>پروتکل لاغری اسپارتینا (Spartina)</h3>
+              <p>ابزار درمانی علمی زیر نظر مستقیم پزشک برای کنترل اشتها، کاهش ریزه‌خواری و افزایش پایبندی به رژیم غذایی؛ پس از بررسی کامل شرایط فردی هر مراجعه‌کننده.</p>
+              <ul class="service-bullets"><li>کنترل اشتها و کالری</li><li>بررسی کامل پزشک</li><li>همراه اصلاح سبک زندگی</li></ul>
+              <button type="button" class="service-btn" data-select-service="پروتکل علمی لاغری اسپارتینا">رزرو مشاوره اسپارتینا ←</button>
+            </div>
+          </article>
+
+          <!-- 6. Skinbooster (Prolux, Zitrital & Undereye) -->
+          <article class="service-card glass tilt-3d reveal" data-svc-cat="skin">
+            <div class="service-media">
+              <img src="./assets/reels/skinbooster.jpg" alt="جوانساز پرولوکس، زیتریتال و زیر چشم در کلینیک مه تو" loading="lazy" />
+              <span class="service-tag">پرولوکس · زیتریتال · چشم</span>
+              <button type="button" class="card-reel-fab" data-play-reel="skinbooster" title="مشاهده ریلز جوانسازها">▶ ریلز</button>
+            </div>
+            <div class="service-body">
+              <h3>جوانساز پرولوکس، زیتریتال و زیر چشم</h3>
+              <p>تزریق جوانسازهای محبوب پرولوکس و زیتریتال (با عملکردی مشابه پروفایلو) برای آبرسانی عمقی و قوام پوست، همراه با پروتکل اختصاصی رفع تیرگی و خطوط زیر چشم.</p>
+              <ul class="service-bullets"><li>عملکرد مشابه پروفایلو</li><li>رفع تیرگی زیر چشم</li><li>آبرسانی و درخشندگی</li></ul>
+              <button type="button" class="service-btn" data-select-service="جوانساز پرولوکس، زیتریتال و زیر چشم">رزرو جوانساز پوست ←</button>
+            </div>
+          </article>
+
+          <!-- 7. Carboxytherapy & Facial -->
+          <article class="service-card glass tilt-3d reveal" data-svc-cat="skin">
+            <div class="service-media">
+              <img src="./assets/reels/carboxy.jpg" alt="کربوکسی‌تراپی روشن‌سازی پوست تا ۴ درجه در کلینیک مه تو" loading="lazy" />
+              <span class="service-tag">فقط ۹۸۰ هزار تومان</span>
+              <button type="button" class="card-reel-fab" data-play-reel="carboxy" title="مشاهده ریلز کربوکسی‌تراپی">▶ ریلز</button>
+            </div>
+            <div class="service-body">
+              <h3>کربوکسی‌تراپی و فیشیال تخصصی</h3>
+              <p>روشن‌سازی پوست تا ۴ درجه، بهبود اکسیژن‌رسانی بافتی، کاهش تیرگی‌ها و فیشیال و پاکسازی تخصصی با همکاری تیم حرفه‌ای اسکن‌کر کلینیک مه‌تو.</p>
+              <ul class="service-bullets"><li>تا ۴ درجه روشن‌تر</li><li>تعرفه ۹۸۰ هزار تومان</li><li>پاکسازی و آبرسانی</li></ul>
+              <button type="button" class="service-btn" data-select-service="کربوکسی‌تراپی و فیشیال (آفر ۹۸۰ هزار)">رزرو کربوکسی و فیشیال ←</button>
+            </div>
+          </article>
+
+          <!-- 8. Hair Filler -->
+          <article class="service-card glass tilt-3d reveal" data-svc-cat="skin">
+            <div class="service-media">
+              <img src="./assets/mahto/hair-filler-1.jpg" alt="تزریق هیر فیلر برای درمان ریزش مو در کلینیک مه تو" loading="lazy" />
+              <span class="service-tag">تقویت فولیکول و ریشه</span>
+            </div>
+            <div class="service-body">
+              <h3>هیر فیلر و درمان ریزش مو</h3>
+              <p>روش تخصصی و مؤثر زیر نظر پزشک برای تغذیه عمقی پوست سر، کاهش محسوس ریزش مو، تحریک رشد مجدد و افزایش ضخامت و استحکام موهای کم‌پشت و آسیب‌دیده.</p>
+              <ul class="service-bullets"><li>کاهش ریزش مو</li><li>افزایش ضخامت تار مو</li><li>تقویت پوست سر</li></ul>
+              <button type="button" class="service-btn" data-select-service="هیر فیلر و درمان ریزش مو">رزرو مشاوره هیر فیلر ←</button>
+            </div>
+          </article>
+
+          <!-- 9. Dental Office Bleaching -->
+          <article class="service-card glass tilt-3d reveal" data-svc-cat="body">
+            <div class="service-media">
+              <img src="./assets/reels/bleaching.jpg" alt="آفیس بلیچینگ و سفید کردن دندان در یک جلسه کلینیک مه تو" loading="lazy" />
+              <span class="service-tag">درخشش لبخند در ۱ جلسه</span>
+              <button type="button" class="card-reel-fab" data-play-reel="bleaching" title="مشاهده ریلز آفیس بلیچینگ">▶ ریلز</button>
+            </div>
+            <div class="service-body">
+              <h3>آفیس بلیچینگ (سفیدکردن دندان)</h3>
+              <p>بهترین انتخاب برای دندان‌های مرتب؛ سفید کردن تخصصی و ایمن دندان‌ها تنها در یک جلسه کلینیکی (Office Bleaching) بدون آسیب به مینای دندان برای لبخندی درخشان.</p>
+              <ul class="service-bullets"><li>نتیجه فوری در ۱ جلسه</li><li>ایمن برای مینای دندان</li><li>لبخند طبیعی و سفید</li></ul>
+              <button type="button" class="service-btn" data-select-service="آفیس بلیچینگ (سفید کردن دندان)">رزرو نوبت بلیچینگ ←</button>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3D INTERACTIVE COVERFLOW GALLERY (PHOTOS + PLAYABLE REELS) -->
+    <section id="gallery" class="section">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="eyebrow">گالری تعاملی سه‌بعدی · @mahto_clinic</span>
+          <h2 class="section-title">نمونه‌کارها، نتایج واقعی و ویدیوهای کلینیک مه تو</h2>
+          <p class="section-desc">کارت‌ها را به چپ و راست بکشید یا روی کارت مرکزی کلیک کنید تا عکس باکیفیت یا ریلز ویدیویی آن همراه توضیحات کامل باز شود.</p>
+        </div>
+
+        <div class="gallery-controls reveal">
+          <button type="button" class="filter-pill active" data-cat="all">همه آثار</button>
+          <button type="button" class="filter-pill" data-cat="ig-work">نمونه‌کار فیلر و فک</button>
+          <button type="button" class="filter-pill" data-cat="laser">لیزر سوپرانو</button>
+          <button type="button" class="filter-pill" data-cat="inject">بوتاکس و لیفت</button>
+          <button type="button" class="filter-pill" data-cat="skin">پوست، مو و جوانساز</button>
+          <button type="button" class="filter-pill" data-cat="body">اسپارتینا و بلیچینگ</button>
+          <button type="button" class="filter-pill view-toggle-pill" id="toggleViewMode">نمای شبکه‌ای ▦</button>
+        </div>
+
+        <div class="stage-3d-shell" id="stage3dShell">
+          <div class="coverflow-stage" id="coverflowStage" aria-label="گالری سه‌بعدی تصاویر و ریلزهای کلینیک"></div>
+          <div class="cf-nav-bar">
+            <button type="button" class="cf-arrow" id="cfPrev" aria-label="آیتم قبلی">→</button>
+            <div class="cf-counter" id="cfCounter">۱ / ۲۶</div>
+            <button type="button" class="cf-arrow" id="cfNext" aria-label="آیتم بعدی">←</button>
+          </div>
+        </div>
+
+        <div class="gallery-grid-mode" id="galleryGridMode"></div>
+      </div>
+    </section>
+
+    <!-- SOPRANO TITANIUM 2025 TECH SPOTLIGHT -->
+    <section id="soprano" class="section">
+      <div class="container">
+        <div class="tech-showcase glass reveal">
+          <div>
+            <span class="eyebrow">تکنولوژی اختصاصی لیزر ۲۰۲۵ در بابل</span>
+            <h2 class="section-title" style="text-align:right;">دستگاه لیزر <span class="gold-gradient-text">Soprano Titanium 2025</span></h2>
+            <p style="color:var(--text-soft); margin-top:8px;">
+              تنظیمات لیزر در کلینیک مه تو برای همه افراد یکسان نیست؛ ترکیب سه طول موج همزمان، خنک‌کننده قدرتمند
+              و پروتکل اختصاصی پزشک باعث صافی کامل پوست بدون درد و موهای زیرپوستی می‌شود.
+            </p>
+
+            <div class="protocol-tabs" role="tablist">
+              <button type="button" class="proto-tab active" data-proto="0">۳ طول موج · انواع پوست</button>
+              <button type="button" class="proto-tab" data-proto="1">زمان‌بندی چرخه آناژن</button>
+              <button type="button" class="proto-tab" data-proto="2">پایش هورمونی پزشک</button>
+            </div>
+
+            <div class="proto-panel" id="protoPanel">
+              <strong>سه طول موج همزمان و پروتکل اختصاصی (روشن تا سبزه)</strong>
+              دستگاه Soprano Titanium 2025 با سه طول موج همزمان و سیستم خنک‌کننده قدرتمند، سریع، کم‌درد و کاملاً ایمن برای تمام تیپ‌های پوستی حتی پوست‌های سبزه است.
+            </div>
+
+            <div style="margin-top:20px; display:flex; flex-wrap:wrap; gap:10px;">
+              <button type="button" class="btn-gold" data-select-service="لیزر موهای زائد (Soprano Titanium 2025)">رزرو فول‌بادی ۷۹۰ هزار تومانی</button>
+              <button type="button" class="btn-glass" id="openBeforeAfterBtn">مشاهده نتیجه قبل و بعد ✦</button>
+              <button type="button" class="btn-glass" data-play-reel="soprano-2025">▶ ریلز دستگاه ۲۰۲۵</button>
+            </div>
+          </div>
+
+          <div class="tech-collage">
+            <div class="tech-photo" style="aspect-ratio: 3/4;">
+              <img src="./assets/mahto/laser-before-after.jpg" alt="نتیجه قبل و بعد صافی پوست با لیزر سوپرانو تیتانیوم" loading="lazy" />
+            </div>
+            <div class="tech-col-right">
+              <div class="tech-photo" style="aspect-ratio: 4/3;">
+                <img src="./assets/mahto/soprano-intro.jpg" alt="آشنایی با دستگاه سوپرانو تیتانیوم" loading="lazy" />
+              </div>
+              <div class="tech-photo" style="aspect-ratio: 4/3;">
+                <img src="./assets/mahto/laser-protocol.jpg" alt="تنظیمات اختصاصی لیزر برای هر پوست" loading="lazy" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MEDICAL KNOWLEDGE VAULT (6 CLINICAL CARDS FROM INSTAGRAM & CLINIC ARCHIVE) -->
+    <section id="knowledge" class="section">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="eyebrow">دانستنی‌های علمی و تخصصی کلینیک مه تو</span>
+          <h2 class="section-title">پاسخ علمی به پرتکرارترین سؤالات مراجعین</h2>
+          <p class="section-desc">برگرفته مستقیم از آموزش‌های تخصصی منتشرشده در پیج رسمی کلینیک زیبایی مه تو و دکتر توحید اسماعیلی</p>
+        </div>
+
+        <div class="vault-grid">
+          <article class="vault-card glass reveal">
+            <div class="vault-thumb" data-open-img="./assets/mahto/filler-myth.jpg">
+              <img src="./assets/mahto/filler-myth.jpg" alt="آیا فیلر باعث افتادگی پوست می‌شود" loading="lazy" />
+            </div>
+            <div>
+              <h3>آیا فیلر باعث افتادگی پوست می‌شود؟</h3>
+              <p>اگر فیلر مناسب با تکنیک درست و در ناحیه صحیح تزریق شود، هرگز باعث افتادگی پوست نمی‌شود. ظاهر غیرطبیعی فقط نتیجه تزریق بیش از حد (Overfilling) یا انتخاب نادرست ناحیه است؛ فیلر اصولی هارمونی چهره را حفظ می‌کند.</p>
+            </div>
+          </article>
+
+          <article class="vault-card glass reveal">
+            <div class="vault-thumb" data-open-img="./assets/mahto/botox-care.jpg">
+              <img src="./assets/mahto/botox-care.jpg" alt="مراقبت‌های بعد از تزریق بوتاکس" loading="lazy" />
+            </div>
+            <div>
+              <h3>قوانین طلایی مراقبت بعد از بوتاکس</h3>
+              <ul class="vault-list">
+                <li>تا ۴ ساعت دراز نکشید و سر را پایین نگیرید</li>
+                <li>ناحیه تزریق را ماساژ و فشار ندهید</li>
+                <li>تا ۲۴ ساعت ورزش سنگین، الکل و حمام یا سونای داغ ممنوع</li>
+                <li>ساعات اول عضلات هدف را آرام حرکت دهید تا بهتر فیکس شود</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="vault-card glass reveal">
+            <div class="vault-thumb" data-play-reel="brow-lift">
+              <img src="./assets/reels/brow-lift.jpg" alt="تکنیک صحیح بوتاکس برای لیفت ابرو و جلوگیری از پتوز" loading="lazy" />
+              <span class="thumb-play-dot">▶</span>
+            </div>
+            <div>
+              <h3>تفاوت لیفت ابرو با افتادگی (پتوز) در بوتاکس</h3>
+              <p>تزریق در ناحیه نامناسب پیشانی می‌تواند باعث افتادگی (پتوز) ابرو شود؛ در حالی که تزریق علمی در نواحی جانبی و سه نقطه کلیدی کنار پلک باعث لیفت ابرو، ایجاد حالت چشم گربه‌ای و حذف چروک دور چشم می‌شود.</p>
+            </div>
+          </article>
+
+          <article class="vault-card glass reveal">
+            <div class="vault-thumb" data-play-reel="spartina">
+              <img src="./assets/reels/spartina.jpg" alt="حقیقت علمی درباره پروتکل لاغری اسپارتینا" loading="lazy" />
+              <span class="thumb-play-dot">▶</span>
+            </div>
+            <div>
+              <h3>حقیقت علمی درباره لاغری با اسپارتینا</h3>
+              <ul class="vault-list">
+                <li>اسپارتینا «معجزه» نیست؛ یک ابزار درمانی زیر نظر پزشک است</li>
+                <li>کمک به کنترل اشتها، کاهش ریزه‌خواری و کالری روزانه</li>
+                <li>بهترین نتیجه همراه با رژیم اصولی و اصلاح سبک زندگی</li>
+                <li>شروع درمان فقط پس از ارزیابی شرایط فردی توسط پزشک</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="vault-card glass reveal">
+            <div class="vault-thumb" data-open-img="./assets/mahto/laser-cycle.jpg">
+              <img src="./assets/mahto/laser-cycle.jpg" alt="چرخه رشد مو و نظم جلسات لیزر" loading="lazy" />
+            </div>
+            <div>
+              <h3>چرا نباید جلسات لیزر را زودتر انجام داد؟</h3>
+              <p>موهای بدن ۳ مرحله رشد دارند و لیزر فقط روی موهای فاز «رشد فعال (آناژن)» اثر می‌گذارد. رعایت نکردن فواصل اصولی روی ریشه‌های غیرفعال اثری ندارد؛ در موارد هورمونی (PCOS یا استرس) نیز پایش پزشک نتیجه را چندبرابر می‌کند.</p>
+            </div>
+          </article>
+
+          <article class="vault-card glass reveal">
+            <div class="vault-thumb" data-open-img="./assets/mahto/hair-filler-2.jpg">
+              <img src="./assets/mahto/hair-filler-2.jpg" alt="مزایای تزریق هیر فیلر" loading="lazy" />
+            </div>
+            <div>
+              <h3>۷ مزیت علمی تزریق هیر فیلر برای مو</h3>
+              <ul class="vault-list">
+                <li>تقویت فولیکول‌ها و تغذیه عمقی ریشه مو</li>
+                <li>کاهش محسوس ریزش و تحریک رشد مجدد</li>
+                <li>افزایش ضخامت، استحکام و بهبود کیفیت پوست سر</li>
+                <li>ایده‌آل برای موهای ضعیف، کم‌پشت و آسیب‌دیده</li>
+              </ul>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- DOCTOR PROFILE -->
+    <section id="doctor" class="section">
+      <div class="container">
+        <div class="doctor-box glass reveal">
+          <div class="doc-portrait-frame">
+            <img src="./assets/mahto/profile.jpg" alt="دکتر توحید اسماعیلی — کلینیک زیبایی مه تو بابل" />
+            <span class="doc-code-pill">نظام پزشکی ۲۳۰۲۴۹</span>
+          </div>
+          <div>
+            <span class="eyebrow">مدیر فنی و پزشک کلینیک زیبایی مه تو</span>
+            <h2 class="section-title" style="text-align:right; margin-bottom:10px;">دکتر توحید اسماعیلی</h2>
+            <p style="color:var(--text-soft); margin-bottom:16px; line-height:1.95;">
+              در کلینیک زیبایی مه‌تو باور داریم هر چیزی که به زیبایی شما مربوط است باید علمی، اصولی و توسط متخصص انجام شود.
+              هدف ما در تزریقات زیبایی، به‌ویژه در مراجعین سنین بالاتر، تنها محو کردن چروک نیست؛ بلکه بازگرداندن هارمونی،
+              حجم از دست رفته و جوانی طبیعی چهره است — بدون تغییر اغراق‌آمیز در بیان و فرم صورت شما.
+            </p>
+            <div class="doc-badges-row">
+              <span class="slide-chip">تزریق تخصصی بوتاکس و فیلر</span>
+              <span class="slide-chip">پایش علمی لاغری و هورمونی</span>
+              <span class="slide-chip">تضمین اصالت برندهای معتبر</span>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:18px;">
+              <a href="#booking" class="btn-gold">رزرو جلسه مشاوره با دکتر</a>
+              <button type="button" class="btn-glass" id="saveVcardBtn">ذخیره شماره در مخاطبین ↓</button>
+              <button type="button" class="btn-glass" id="shareSiteBtn">اشتراک‌گذاری صفحه ↗</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SMART WIZARD + BOOKING + OFFICIAL CONTACT -->
+    <section id="booking" class="section">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="eyebrow">مشاور هوشمند و رزرو نوبت آنلاین</span>
+          <h2 class="section-title">همین حالا مشاوره رایگان خود را رزرو کنید</h2>
+          <p class="section-desc">خدمت مناسب خود را انتخاب کنید، کد پیگیری فوری بگیرید و با پذیرش کلینیک مه‌تو در بابل هماهنگ شوید.</p>
+        </div>
+
+        <div class="wizard-box glass reveal">
+          <div style="font-size:0.95rem; font-weight:800; color:var(--gold-light);">✦ مشاور سریع انتخاب خدمت: دغدغه اصلی زیبایی شما چیست؟</div>
+          <div class="wizard-chips" id="wizardChips"></div>
+          <div class="wizard-output">
+            <p id="wizardAdvice" style="font-size:0.9rem; color:var(--text-soft); flex:1; min-width:220px;"></p>
+            <button type="button" class="btn-gold" id="wizardApplyBtn" style="padding:10px 20px; font-size:0.85rem;">انتخاب در فرم نوبت‌دهی ↓</button>
+          </div>
+        </div>
+
+        <div class="booking-grid">
+          <div class="form-card glass reveal">
+            <h3 style="font-size:1.25rem; font-weight:900;">فرم ثبت نوبت و مشاوره رایگان</h3>
+            <p style="font-size:0.86rem; color:var(--muted); margin-top:4px;">اطلاعات را وارد کنید تا کد پیگیری نوبت برای شما صادر شود.</p>
+
+            <form id="bookingForm" novalidate>
+              <div class="form-grid two-col">
+                <div class="field">
+                  <label for="fName">نام و نام خانوادگی *</label>
+                  <input id="fName" name="fullName" type="text" required placeholder="مثلاً: سارا محمدی" />
+                </div>
+                <div class="field">
+                  <label for="fPhone">شماره تماس (موبایل) *</label>
+                  <input id="fPhone" name="phone" type="tel" dir="ltr" required placeholder="0911xxxxxxx" />
+                </div>
+              </div>
+
+              <div class="form-grid two-col">
+                <div class="field">
+                  <label for="fService">خدمت مورد نظر *</label>
+                  <select id="fService" name="service" required>
+                    <option value="لیزر موهای زائد (Soprano Titanium 2025)">لیزر سوپرانو ۲۰۲۵ (آفر فول‌بادی ۷۹۰ هزار تومان)</option>
+                    <option value="فیلر لب، چانه و زاویه‌سازی فک">فیلر لب نورامیس، چانه رووفیل و زاویه‌سازی فک</option>
+                    <option value="بوتاکس تخصصی و لیفت ابرو">بوتاکس تخصصی و لیفت ابرو (چشم گربه‌ای)</option>
+                    <option value="هایفوتراپی و لیفت صورت (آفر ۳.۵ میلیون)">هایفوتراپی و لیفت بدون جراحی (آفر ۳.۵ میلیون)</option>
+                    <option value="پروتکل علمی لاغری اسپارتینا">پروتکل علمی لاغری اسپارتینا (زیر نظر پزشک)</option>
+                    <option value="جوانساز پرولوکس، زیتریتال و زیر چشم">جوانساز پرولوکس، زیتریتال و زیر چشم</option>
+                    <option value="کربوکسی‌تراپی و فیشیال (آفر ۹۸۰ هزار)">کربوکسی‌تراپی روشن‌سازی و فیشیال (۹۸۰ هزار)</option>
+                    <option value="هیر فیلر و درمان ریزش مو">هیر فیلر و درمان تخصصی ریزش مو</option>
+                    <option value="آفیس بلیچینگ (سفید کردن دندان)">آفیس بلیچینگ (سفید کردن دندان در ۱ جلسه)</option>
+                    <option value="مشاوره عمومی پوست و مو (کمپین هدیه ۳۰۰ میلیونی)">مشاوره تخصصی پوست و مو (کمپین هدیه ۳۰۰ میلیونی)</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="fTime">زمان ترجیحی تماس / مراجعه</label>
+                  <select id="fTime" name="preferredTime">
+                    <option value="تماس در اولین فرصت">تماس در اولین فرصت</option>
+                    <option value="شیفت صبح">شیفت صبح</option>
+                    <option value="شیفت عصر">شیفت عصر</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-grid">
+                <div class="field">
+                  <label for="fNotes">توضیحات یا سؤال شما (اختیاری)</label>
+                  <textarea id="fNotes" name="notes" rows="3" placeholder="اگر درباره ناحیه تزریق، برند فیلر، تیپ پوستی یا آفرهای جشنواره سؤالی دارید بنویسید..."></textarea>
+                </div>
+              </div>
+
+              <div style="margin-top:16px;">
+                <button type="submit" class="btn-gold" id="submitBookingBtn" style="width:100%;">ثبت درخواست نوبت و دریافت کد پیگیری</button>
+              </div>
+              <div class="booking-result" id="bookingResult" role="status"></div>
+            </form>
+          </div>
+
+          <div class="contact-card glass reveal">
+            <h3 style="font-size:1.25rem; font-weight:900; margin-bottom:14px;">تماس مستقیم و نشانی کلینیک</h3>
+
+            <div class="phone-row">
+              <a href="tel:+989201827726">
+                <span class="phone-badge">۱</span>
+                <span dir="ltr">۰۹۲۰ ۱۸۲ ۷۷۲۶</span>
+              </a>
+              <button type="button" class="copy-mini" data-copy="09201827726">کپی شماره</button>
+            </div>
+
+            <div class="phone-row">
+              <a href="tel:+989001827726">
+                <span class="phone-badge">۲</span>
+                <span dir="ltr">۰۹۰۰ ۱۸۲ ۷۷۲۶</span>
+              </a>
+              <button type="button" class="copy-mini" data-copy="09001827726">کپی شماره</button>
+            </div>
+
+            <div class="address-glass">
+              <div style="font-size:0.82rem; color:var(--gold-light); font-weight:800; margin-bottom:5px;">📍 نشانی دقیق کلینیک زیبایی مه تو</div>
+              <p style="font-size:0.89rem; color:var(--text-soft);">
+                مازندران، بابل، خورشیدکلا، بلوار جانبازان، میدان شهید سجودی (میدان قاضی کتی)، ساختمان مازیار، طبقهٔ ۷، واحد ۲۹
+              </p>
+              <div class="map-btns">
+                <a href="https://nshn.ir/24_bfh6w5FLSm4" target="_blank" rel="noopener noreferrer" class="btn-glass" style="padding:10px 12px; font-size:0.82rem;">مسیریابی در نشان</a>
+                <a href="https://www.google.com/maps/search/?api=1&amp;query=36.54234479458029,52.67127432342055" target="_blank" rel="noopener noreferrer" class="btn-glass" style="padding:10px 12px; font-size:0.82rem;">مسیریابی گوگل مپ</a>
+              </div>
+            </div>
+
+            <div style="margin-top:18px;">
+              <div style="font-size:0.82rem; font-weight:800; color:var(--gold-light); margin-bottom:8px;">شبکه‌های اجتماعی و پیام‌رسان‌های رسمی</div>
+              <div class="social-grid">
+                <a href="https://www.instagram.com/mahto_clinic" target="_blank" rel="noopener noreferrer" class="social-pill">📸 اینستاگرام</a>
+                <a href="https://t.me/mahto_clinic" target="_blank" rel="noopener noreferrer" class="social-pill">✈ تلگرام</a>
+                <a href="https://eitaa.com/mahto_clinic" target="_blank" rel="noopener noreferrer" class="social-pill">🟠 ایتا</a>
+                <a href="https://ble.ir/join/mahto_clinic" target="_blank" rel="noopener noreferrer" class="social-pill">🟢 بله</a>
+                <a href="https://rubika.ir/mahto_clinic" target="_blank" rel="noopener noreferrer" class="social-pill">🟣 روبیکا</a>
+                <a href="https://wa.me/989201827726" target="_blank" rel="noopener noreferrer" class="social-pill">💬 واتساپ</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="container">
+        <div style="font-weight:900; font-size:1.08rem; margin-bottom:4px;">کلینیک زیبایی مه تو · MAHTO CLINIC 🌙</div>
+        <div style="font-size:0.84rem; color:var(--muted);">دکتر توحید اسماعیلی · پوست، مو، لیزر سوپرانو ۲۰۲۵، هایفو، بلیچینگ و لاغری اسپارتینا · بابل · نظام پزشکی ۲۳۰۲۴۹</div>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Desktop 3D Scene HUD -->
+  <div class="hud-3d" aria-label="کنترلر صحنه سه‌بعدی">
+    <button type="button" class="hud-btn" id="hudBurstBtn">🌸 بارش شکوفه</button>
+    <button type="button" class="hud-btn" id="hudAuraBtn">✨ هاله کهکشانی</button>
+    <button type="button" class="hud-btn" id="hudPauseBtn">⏸ توقف ۳بعدی</button>
+  </div>
+
+  <!-- Mobile Floating Dock -->
+  <div class="mobile-dock" aria-label="دسترسی سریع موبایل">
+    <a href="tel:+989201827726" class="dock-item">📞 تماس</a>
+    <a href="#booking" class="dock-item primary">✦ رزرو نوبت</a>
+    <a href="#reels" class="dock-item">🎬 ریلزها</a>
+  </div>
+
+  <!-- Fullscreen Lightbox Modal (Photos + Videos) -->
+  <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="نمایش رسانه">
+    <button type="button" class="lb-close" id="lbClose" aria-label="بستن">✕</button>
+    <div class="lb-box">
+      <div class="lb-media" id="lbMedia"></div>
+      <div class="lb-content">
+        <div>
+          <span class="eyebrow" id="lbCat" style="margin-bottom:10px;"></span>
+          <h3 id="lbTitle" style="font-size:1.18rem; font-weight:900; margin-bottom:10px; color:#f6e0aa; line-height:1.45;"></h3>
+          <p id="lbDesc" style="font-size:0.91rem; color:#ead4e0; line-height:1.95; white-space:pre-line;"></p>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:10px;">
+          <button type="button" class="btn-gold" id="lbBookBtn" style="flex:1;">مشاوره رایگان برای این خدمت</button>
+          <a id="lbIgLink" href="https://www.instagram.com/mahto_clinic" target="_blank" rel="noopener noreferrer" class="btn-glass">صفحه اینستاگرام ↗</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
